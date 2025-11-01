@@ -24,13 +24,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { qr_code, scanner_id, timestamp } = req.body;
+    console.log('📱 Scanner Webhook - Headers:', req.headers);
+    console.log('📱 Scanner Webhook - Body:', req.body);
 
-    console.log('📱 Scanner Webhook - Received:', {
-      qr_code,
-      scanner_id,
-      timestamp: new Date().toISOString()
-    });
+    const { qr_code, scanner_id, timestamp } = req.body;
 
     // Validate required fields
     if (!qr_code) {
@@ -49,9 +46,10 @@ export default async function handler(req, res) {
       message: 'QR code received successfully',
       qr_code: qr_code,
       product_code: productCode,
-      scanner_id: scanner_id,
+      scanner_id: scanner_id || 'ESP32_GM67_SCANNER',
       received_at: new Date().toISOString(),
-      instructions: 'The product should now appear in the shopping cart'
+      timestamp: timestamp || Date.now(),
+      status: 'processed'
     };
 
     console.log('✅ Scanner Webhook - Success:', response);
@@ -71,7 +69,7 @@ export default async function handler(req, res) {
 
 // Helper function to extract product code from QR data
 function extractProductCode(qrData) {
-  // Handle different QR code formats
+  if (!qrData) return 'UNKNOWN';
   
   // Format 1: Just product code (e.g., "RAPIDENE-001")
   if (qrData.indexOf('|') === -1 && qrData.indexOf(':') === -1) {
@@ -90,6 +88,8 @@ function extractProductCode(qrData) {
     const parts = qrData.split('|');
     if (parts.length >= 5) {
       return parts[4]; // Product code is the last part
+    } else if (parts.length >= 1) {
+      return parts[0]; // Use first part as product code
     }
   }
   
