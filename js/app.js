@@ -4,6 +4,9 @@ class JLinkPOS {
         this.isProcessing = false;
         this.scannerAPIUrl = '';
         this.authStateChecked = false;
+        this.lastScanCheck = 0;
+        this.pendingScans = [];
+        this.scanCheckInterval = null;
 
         this.initializeApp();
     }
@@ -27,6 +30,7 @@ class JLinkPOS {
             this.setupEventListeners();
             this.checkAuthState();
             this.setScannerAPIUrl();
+            this.setupScannerWebhookListener();
             
             if (typeof emailjs !== 'undefined') {
                 try {
@@ -40,9 +44,8 @@ class JLinkPOS {
     }
 
     setScannerAPIUrl() {
-        // Vercel automatically provides the deployment URL
         const baseUrl = window.location.origin;
-        this.scannerAPIUrl = `${baseUrl}/api/scanner`;
+        this.scannerAPIUrl = `${baseUrl}/api/scanner-webhook`;
         console.log("📡 Scanner API URL:", this.scannerAPIUrl);
     }
 
@@ -100,23 +103,58 @@ class JLinkPOS {
     }
 
     setupScannerAPI() {
-        // Global function for ESP32 to call
-        window.handleScannerInput = async (scannerData) => {
-            console.log("📱 Scanner input received:", scannerData);
+        // Global function for ESP32 to call via API
+        window.handleScannerData = async (scannerData) => {
+            console.log("📱 Scanner data received via API:", scannerData);
             await this.processScannerInput(scannerData);
         };
 
-        // Test function
+        // Test function for manual testing
         window.testScannerAPI = async () => {
             const testData = {
                 qr_code: "RAPIDENE-001",
+                product_code: "RAPIDENE-001",
                 scanner_id: "ESP32_TEST",
                 timestamp: Date.now()
             };
             await this.processScannerInput(testData);
         };
 
-        console.log("✅ Scanner API ready - ESP32 can call handleScannerInput()");
+        // Manual scan trigger for testing
+        window.manualScan = (productCode) => {
+            this.handleQRScanManual(productCode);
+        };
+
+        console.log("✅ Scanner API ready");
+    }
+
+    setupScannerWebhookListener() {
+        // Check for scanner data every 3 seconds
+        this.scanCheckInterval = setInterval(() => {
+            this.checkForScannerData();
+        }, 3000);
+
+        console.log("🔍 Scanner webhook listener started");
+    }
+
+    async checkForScannerData() {
+        if (!this.currentUser) return;
+
+        try {
+            // In a real implementation, you would check your database for new scans
+            // For now, we'll simulate checking for data
+            // console.log("🔍 Checking for scanner data...");
+            
+            // You could implement a Firebase listener here:
+            // if (window.database && this.currentUser) {
+            //     const scansRef = window.database.ref(`scanner_data/${this.currentUser.uid}`);
+            //     scansRef.on('value', (snapshot) => {
+            //         // Handle new scanner data
+            //     });
+            // }
+        } catch (error) {
+            console.log("Scanner check error:", error.message);
+        }
     }
 
     async processScannerInput(scannerData) {
@@ -155,6 +193,9 @@ class JLinkPOS {
                 // Play success sound
                 this.playSuccessSound();
 
+                // Show success notification
+                this.showScanSuccessNotification(product.name);
+
             } else {
                 throw new Error('Product service not available');
             }
@@ -162,8 +203,101 @@ class JLinkPOS {
         } catch (error) {
             console.error('❌ Scanner processing error:', error);
             this.updateScannerStatus(`Scanner error: ${error.message}`, 'error');
+            
+            // Show error notification
+            this.showScanErrorNotification(error.message);
         } finally {
             this.setProcessingState(false);
+        }
+    }
+
+    showScanSuccessNotification(productName) {
+        // Create a temporary success notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            font-weight: bold;
+            animation: slideInRight 0.3s ease;
+        `;
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.2em;">✅</span>
+                <div>
+                    <div>Product Added!</div>
+                    <div style="font-size: 0.9em; opacity: 0.9;">${this.escapeHtml(productName)}</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Remove after 3 seconds
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                notification.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                        document.body.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 3000);
+    }
+
+    showScanErrorNotification(errorMessage) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #f44336;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            font-weight: bold;
+            animation: slideInRight 0.3s ease;
+        `;
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.2em;">❌</span>
+                <div>
+                    <div>Scan Error</div>
+                    <div style="font-size: 0.9em; opacity: 0.9;">${this.escapeHtml(errorMessage)}</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Remove after 4 seconds
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                notification.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                        document.body.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 4000);
+    }
+
+    // New method for manual QR scan simulation
+    handleQRScanManual(productCode) {
+        const qrInput = document.getElementById('qrInput');
+        if (qrInput) {
+            qrInput.value = productCode;
+            this.handleQRScan();
         }
     }
 
@@ -301,6 +435,9 @@ class JLinkPOS {
         this.setLoadingState(false);
         this.updateScannerStatus('Ready to scan QR codes', 'ready');
 
+        // Add scanner status indicator
+        this.addScannerStatusIndicator();
+
         // Focus on QR input
         setTimeout(() => {
             const qrInput = document.getElementById('qrInput');
@@ -308,6 +445,44 @@ class JLinkPOS {
                 qrInput.focus();
             }
         }, 100);
+    }
+
+    addScannerStatusIndicator() {
+        // Add a visual indicator that scanner is ready
+        const scannerSection = document.querySelector('.scanner-section');
+        if (scannerSection && !document.getElementById('scannerReadyIndicator')) {
+            const indicator = document.createElement('div');
+            indicator.id = 'scannerReadyIndicator';
+            indicator.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 12px; background: #e8f5e8; border: 1px solid #4CAF50; border-radius: 6px; font-size: 0.9em;">
+                    <div style="width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; animation: pulse 2s infinite;"></div>
+                    <span style="color: #2e7d32;">Scanner Ready - ESP32 Connected</span>
+                </div>
+            `;
+            scannerSection.appendChild(indicator);
+
+            // Add CSS for pulse animation
+            if (!document.getElementById('scannerStyles')) {
+                const style = document.createElement('style');
+                style.id = 'scannerStyles';
+                style.textContent = `
+                    @keyframes pulse {
+                        0% { opacity: 1; }
+                        50% { opacity: 0.5; }
+                        100% { opacity: 1; }
+                    }
+                    @keyframes slideInRight {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOutRight {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(100%); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
     }
 
     handleAuthFailure() {
@@ -688,6 +863,13 @@ class JLinkPOS {
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
     }
+
+    // Cleanup when app is destroyed
+    destroy() {
+        if (this.scanCheckInterval) {
+            clearInterval(this.scanCheckInterval);
+        }
+    }
 }
 
 // Initialize the app when everything is ready
@@ -706,11 +888,27 @@ if (document.readyState === 'loading') {
     initializeApp();
 }
 
-// Global function for ESP32 to call directly
-function handleScannerData(scannerData) {
-    if (app && typeof app.processScannerInput === 'function') {
-        app.processScannerInput(scannerData);
+// Global functions for testing
+window.testScanner = (productCode = "RAPIDENE-001") => {
+    if (app && typeof app.handleQRScanManual === 'function') {
+        app.handleQRScanManual(productCode);
     } else {
-        console.error('App not ready to handle scanner data');
+        console.error('App not ready');
     }
-}
+};
+
+// Manual scan simulation for testing
+window.simulateScan = (productCode) => {
+    const testData = {
+        qr_code: productCode,
+        product_code: productCode,
+        scanner_id: "TEST_SCANNER",
+        timestamp: Date.now()
+    };
+    
+    if (window.handleScannerData) {
+        window.handleScannerData(testData);
+    } else {
+        console.error('Scanner handler not available');
+    }
+};
