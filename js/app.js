@@ -30,9 +30,9 @@ class JLinkPOS {
             this.setupEventListeners();
             this.checkAuthState();
             this.setScannerAPIUrl();
-            this.setupScannerAPI(); // Initialize scanner API
-            this.setupScannerWebhookListener();
+            this.setupScannerAPI();
             
+            // Initialize EmailJS if available
             if (typeof emailjs !== 'undefined') {
                 try {
                     emailjs.init("G4dKsQOK9_vg9Mi2o");
@@ -79,35 +79,18 @@ class JLinkPOS {
         console.log("✅ Scanner API integration ready");
     }
 
-    setupScannerWebhookListener() {
-        // Check for scanner data every 3 seconds
-        this.scanCheckInterval = setInterval(() => {
-            this.checkForScannerData();
-        }, 3000);
-
-        console.log("🔍 Scanner webhook listener started");
-    }
-
-    async checkForScannerData() {
-        if (!this.currentUser) return;
-
-        try {
-            // In a real implementation, you would check Firebase for new scans
-            // For now, this is a placeholder for future real-time updates
-            // console.log("🔍 Checking for scanner data...");
-        } catch (error) {
-            console.log("Scanner check error:", error.message);
-        }
-    }
-
     setupEventListeners() {
         console.log("🔧 Setting up event listeners...");
         
         // Login events
         const loginBtn = document.getElementById('loginBtn');
+        const loginEmail = document.getElementById('loginEmail');
         const loginPassword = document.getElementById('loginPassword');
         
         if (loginBtn) loginBtn.addEventListener('click', () => this.handleLogin());
+        if (loginEmail) loginEmail.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.handleLogin();
+        });
         if (loginPassword) loginPassword.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.handleLogin();
         });
@@ -338,6 +321,7 @@ class JLinkPOS {
             this.handleAuthFailure();
         });
 
+        // Fallback check
         setTimeout(() => {
             if (!this.authStateChecked) {
                 console.log("⏰ Auth state timeout - checking current user");
@@ -415,6 +399,13 @@ class JLinkPOS {
         if (typeof salesService !== 'undefined') {
             salesService.setUser(user);
         }
+        
+        // ✅ NEW: Start scanner listener if available
+        if (typeof scannerListener !== 'undefined') {
+            scannerListener.setUser(user);
+            scannerListener.startListening();
+            console.log("✅ Scanner listener started");
+        }
 
         // Update UI
         const currentUserElement = document.getElementById('currentUser');
@@ -424,7 +415,7 @@ class JLinkPOS {
 
         this.showScreen('posScreen');
         this.setLoadingState(false);
-        this.updateScannerStatus('Ready to scan QR codes', 'ready');
+        this.updateScannerStatus('Ready to scan QR codes - ESP32 connected', 'ready');
 
         // Add scanner status indicator
         this.addScannerStatusIndicator();
@@ -582,13 +573,11 @@ class JLinkPOS {
         const itemCountElement = document.getElementById('itemCount');
         const cartValueElement = document.getElementById('cartValue');
         const subtotalElement = document.getElementById('subtotalAmount');
-        const taxElement = document.getElementById('taxAmount');
         const totalElement = document.getElementById('totalAmount');
 
         if (itemCountElement) itemCountElement.textContent = totals.itemCount;
         if (cartValueElement) cartValueElement.textContent = `LKR ${totals.total.toFixed(2)}`;
         if (subtotalElement) subtotalElement.textContent = `LKR ${totals.subtotal.toFixed(2)}`;
-        if (taxElement) taxElement.textContent = `LKR ${totals.tax.toFixed(2)}`;
         if (totalElement) totalElement.textContent = `LKR ${totals.total.toFixed(2)}`;
 
         if (!cartItemsContainer) return;
@@ -617,7 +606,7 @@ class JLinkPOS {
                 </div>
                 <div class="cart-item-actions">
                     <div class="quantity-controls">
-                        <button class="quantity-btn" onclick="app.decreaseQuantity('${item.productId}')">-</button>
+                        <button class="quantity-btn minus-btn" onclick="app.decreaseQuantity('${item.productId}')">-</button>
                         <span class="quantity-display">${item.quantity}</span>
                         <button class="quantity-btn" onclick="app.increaseQuantity('${item.productId}')">+</button>
                     </div>
@@ -859,6 +848,11 @@ class JLinkPOS {
     destroy() {
         if (this.scanCheckInterval) {
             clearInterval(this.scanCheckInterval);
+        }
+        
+        // Stop scanner listener if available
+        if (typeof scannerListener !== 'undefined') {
+            scannerListener.stopListening();
         }
     }
 }
