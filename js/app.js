@@ -3,15 +3,19 @@ class JLinkPOS {
         this.currentUser = null;
         this.isProcessing = false;
         this.scannerAPIUrl = '';
+        this.pollingUrl = '';
         this.authStateChecked = false;
         this.lastScanId = 0;
         this.pollInterval = null;
+        this.isListening = false;
+        this.totalScansReceived = 0;
 
         this.initializeApp();
     }
 
     initializeApp() {
         console.log("🚀 JLINK POS App Starting...");
+        this.addDebugLog("🚀 App initializing...");
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -24,6 +28,7 @@ class JLinkPOS {
 
     initAfterDOMReady() {
         console.log("📋 DOM Ready - Initializing app...");
+        this.addDebugLog("📋 DOM ready, setting up app...");
         
         setTimeout(() => {
             this.setupEventListeners();
@@ -35,8 +40,10 @@ class JLinkPOS {
                 try {
                     emailjs.init("G4dKsQOK9_vg9Mi2o");
                     console.log("✅ EmailJS initialized");
+                    this.addDebugLog("✅ EmailJS initialized");
                 } catch (emailError) {
                     console.warn("EmailJS init warning:", emailError);
+                    this.addDebugLog("⚠️ EmailJS init warning");
                 }
             }
         }, 500);
@@ -50,10 +57,13 @@ class JLinkPOS {
             scanner: this.scannerAPIUrl,
             polling: this.pollingUrl
         });
+        this.addDebugLog(`📡 Scanner API: ${this.scannerAPIUrl}`);
+        this.addDebugLog(`📡 Polling API: ${this.pollingUrl}`);
     }
 
     setupEventListeners() {
         console.log("🔧 Setting up event listeners...");
+        this.addDebugLog("🔧 Setting up event listeners...");
         
         // Login events
         const loginBtn = document.getElementById('loginBtn');
@@ -106,6 +116,7 @@ class JLinkPOS {
         }
 
         console.log("✅ Event listeners setup complete");
+        this.addDebugLog("✅ Event listeners setup complete");
     }
 
     startPollingForScans() {
@@ -113,13 +124,17 @@ class JLinkPOS {
             clearInterval(this.pollInterval);
         }
 
+        this.isListening = true;
         console.log("🔍 Starting to poll for scanner data...");
-        
+        this.addDebugLog("🔍 Starting polling for GM67 scanner...");
+
+        // Poll every 2 seconds for real-time updates
         this.pollInterval = setInterval(() => {
             this.checkForNewScans();
         }, 2000);
 
-        this.updateScannerStatus('🔍 Polling for scanner data...', 'processing');
+        this.updateScannerStatus('🔍 Polling for GM67 scanner data...', 'processing');
+        this.updateDebugPanel({ pollingStatus: 'Active' });
     }
 
     stopPolling() {
@@ -127,14 +142,23 @@ class JLinkPOS {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
         }
+        this.isListening = false;
         console.log("🔍 Stopped polling for scanner data");
+        this.addDebugLog("🔍 Stopped polling");
+        this.updateDebugPanel({ pollingStatus: 'Stopped' });
     }
 
     async checkForNewScans() {
-        if (!this.currentUser) return;
+        if (!this.currentUser || !this.isListening) {
+            console.log("⏸️ Polling skipped - no user or not listening");
+            return;
+        }
 
         try {
-            const response = await fetch(`${this.pollingUrl}?last_id=${this.lastScanId}&t=${Date.now()}`);
+            console.log("🔍 Polling for new scans...");
+            const url = `${this.pollingUrl}?last_id=${this.lastScanId}&t=${Date.now()}`;
+            
+            const response = await fetch(url);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -142,8 +166,18 @@ class JLinkPOS {
 
             const data = await response.json();
             
+            console.log("📡 Polling response:", {
+                success: data.success,
+                new_scans: data.data ? data.data.length : 0,
+                total_scans: data.total_scans,
+                last_id: data.last_id
+            });
+
+            this.addDebugLog(`📡 Poll: ${data.new_scans || 0} new scans`);
+            
             if (data.success && data.data && data.data.length > 0) {
                 console.log(`📱 Received ${data.data.length} new scans from server`);
+                this.addDebugLog(`✅ Received ${data.data.length} scans from GM67`);
                 
                 // Process each new scan
                 for (const scanData of data.data) {
@@ -152,17 +186,39 @@ class JLinkPOS {
                 
                 // Update last ID
                 this.lastScanId = data.last_id;
-                this.updateScannerStatus(`✅ Real-time: ${data.data.length} new scans processed`, 'ready');
+                this.totalScansReceived += data.data.length;
+                
+                this.updateScannerStatus(`✅ GM67: ${data.data.length} new scans processed`, 'ready');
+                this.updateDebugPanel({
+                    lastScanId: this.lastScanId,
+                    totalScans: this.totalScansReceived,
+                    pollingStatus: 'Active'
+                });
+
+                // Show success notification for the first scan
+                if (data.data.length > 0) {
+                    this.showNotification(`GM67 Scanner: ${data.data.length} item(s) added to cart`, 'success');
+                }
+            } else if (data.success) {
+                // No new scans, but API is working
+                this.updateDebugPanel({
+                    pollingStatus: 'Active (No new scans)'
+                });
             }
 
         } catch (error) {
             console.log("❌ Polling error:", error.message);
+            this.addDebugLog(`❌ Poll error: ${error.message}`);
             this.updateScannerStatus(`❌ Polling error: ${error.message}`, 'error');
+            this.updateDebugPanel({
+                pollingStatus: `Error: ${error.message}`
+            });
         }
     }
 
     async processScanData(scanData) {
         console.log("🔄 Processing scan data:", scanData);
+        this.addDebugLog(`🔄 Processing scan: ${scanData.data?.product_code}`);
 
         if (scanData.type === 'SCANNER_DATA' && scanData.data) {
             const scannerData = scanData.data;
@@ -175,16 +231,18 @@ class JLinkPOS {
                 
                 if (typeof productService !== 'undefined') {
                     const product = await productService.findProductByCode(productCode);
-                    console.log("✅ Product found via real-time scan:", product);
+                    console.log("✅ Product found via GM67 scan:", product);
+                    this.addDebugLog(`✅ Found product: ${product.name}`);
 
                     if (product.quantity <= 0) {
+                        this.addDebugLog(`❌ Product out of stock: ${product.name}`);
                         this.showNotification(`${product.name} - Out of stock`, 'error');
                         return;
                     }
 
                     // Add to cart
                     cartManager.addItem(product, 1);
-                    this.showNotification(`🔗 SCANNER: ${product.name} added to cart`, 'success');
+                    this.addDebugLog(`🛒 Added to cart: ${product.name}`);
                     
                     // Play success sound
                     this.playSuccessSound();
@@ -195,7 +253,8 @@ class JLinkPOS {
 
             } catch (error) {
                 console.error('❌ Scan processing error:', error);
-                this.showNotification(`Scanner error: ${error.message}`, 'error');
+                this.addDebugLog(`❌ Scan error: ${error.message}`);
+                this.showNotification(`GM67 Error: ${error.message}`, 'error');
             }
         }
     }
@@ -271,15 +330,18 @@ class JLinkPOS {
 
     checkAuthState() {
         console.log("🔐 Checking authentication state...");
+        this.addDebugLog("🔐 Checking authentication...");
         
         if (!window.auth) {
             console.error("❌ Firebase auth not available");
+            this.addDebugLog("❌ Firebase auth not available");
             this.showScreen('loginScreen');
             return;
         }
 
         window.auth.onAuthStateChanged((user) => {
             console.log("🔄 Auth state changed:", user ? user.email : "No user");
+            this.addDebugLog(user ? `✅ User: ${user.email}` : "❌ No user");
             this.authStateChecked = true;
             
             if (user) {
@@ -289,6 +351,7 @@ class JLinkPOS {
             }
         }, (error) => {
             console.error("❌ Auth state listener error:", error);
+            this.addDebugLog(`❌ Auth error: ${error.message}`);
             this.authStateChecked = true;
             this.handleAuthFailure();
         });
@@ -297,6 +360,7 @@ class JLinkPOS {
         setTimeout(() => {
             if (!this.authStateChecked) {
                 console.log("⏰ Auth state timeout - checking current user");
+                this.addDebugLog("⏰ Auth timeout, checking current user...");
                 const currentUser = window.auth.currentUser;
                 if (currentUser) {
                     this.handleAuthSuccess(currentUser);
@@ -314,11 +378,13 @@ class JLinkPOS {
 
         if (!email || !password) {
             this.updateScannerStatus('Please enter email and password', 'error');
+            this.addDebugLog("❌ Login: Missing email or password");
             return;
         }
 
         this.setLoadingState(true);
         this.updateScannerStatus('Logging in...', 'processing');
+        this.addDebugLog(`🔐 Logging in: ${email}`);
 
         try {
             console.log("🔐 Attempting login for:", email);
@@ -329,10 +395,12 @@ class JLinkPOS {
 
             const userCredential = await window.auth.signInWithEmailAndPassword(email, password);
             console.log('✅ Login successful:', userCredential.user.email);
+            this.addDebugLog(`✅ Login successful: ${userCredential.user.email}`);
             
         } catch (error) {
             this.setLoadingState(false);
             console.error('❌ Login error:', error);
+            this.addDebugLog(`❌ Login failed: ${error.message}`);
             
             let errorMessage = 'Login failed';
             if (error.code === 'auth/user-not-found') {
@@ -351,26 +419,32 @@ class JLinkPOS {
     }
 
     async handleLogout() {
+        this.addDebugLog("🚪 Logging out...");
         this.stopPolling();
         try {
             await window.auth.signOut();
             this.updateScannerStatus('Logged out successfully', 'ready');
+            this.addDebugLog("✅ Logged out successfully");
         } catch (error) {
             console.error('Logout error:', error);
+            this.addDebugLog(`❌ Logout error: ${error.message}`);
             this.updateScannerStatus('Logout failed', 'error');
         }
     }
 
     handleAuthSuccess(user) {
         console.log("✅ Authentication successful:", user.email);
+        this.addDebugLog(`✅ Auth success: ${user.email}`);
         this.currentUser = user;
         
         // Set user for services
         if (typeof productService !== 'undefined') {
             productService.setUser(user);
+            this.addDebugLog("✅ Product service initialized");
         }
         if (typeof salesService !== 'undefined') {
             salesService.setUser(user);
+            this.addDebugLog("✅ Sales service initialized");
         }
 
         // Update UI
@@ -382,8 +456,19 @@ class JLinkPOS {
         this.showScreen('posScreen');
         this.setLoadingState(false);
         
-        // ✅ START POLLING FOR SCANNER DATA
+        // ✅ START POLLING FOR GM67 SCANNER DATA
         this.startPollingForScans();
+
+        // Update scanner connection status
+        const scannerConnection = document.getElementById('scannerConnection');
+        if (scannerConnection) {
+            scannerConnection.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; animation: pulse 2s infinite;"></div>
+                    <span style="color: #2e7d32; font-weight: 500;">✅ GM67 Scanner Connected - Real-time polling active</span>
+                </div>
+            `;
+        }
 
         // Focus on QR input
         setTimeout(() => {
@@ -396,6 +481,7 @@ class JLinkPOS {
 
     handleAuthFailure() {
         console.log("❌ No user authenticated");
+        this.addDebugLog("❌ Auth failed - no user");
         this.currentUser = null;
         this.showScreen('loginScreen');
         this.setLoadingState(false);
@@ -408,6 +494,7 @@ class JLinkPOS {
 
         if (!productCode) {
             this.updateScannerStatus('Please enter a product code', 'error');
+            this.addDebugLog("❌ Manual scan: No product code");
             return;
         }
 
@@ -415,6 +502,7 @@ class JLinkPOS {
 
         this.setProcessingState(true);
         this.updateScannerStatus('Searching for product...', 'processing');
+        this.addDebugLog(`🔍 Manual scan: ${productCode}`);
 
         try {
             if (typeof productService === 'undefined') {
@@ -423,14 +511,17 @@ class JLinkPOS {
 
             const product = await productService.findProductByCode(productCode);
             console.log("✅ Product found via manual entry:", product);
+            this.addDebugLog(`✅ Manual scan found: ${product.name}`);
 
             if (product.quantity <= 0) {
                 this.updateScannerStatus(`Product out of stock: ${product.name}`, 'error');
+                this.addDebugLog(`❌ Manual scan: ${product.name} out of stock`);
                 return;
             }
 
             cartManager.addItem(product, 1);
             this.updateScannerStatus(`Added: ${product.name}`, 'ready');
+            this.addDebugLog(`🛒 Manual scan added: ${product.name}`);
             this.playSuccessSound();
 
             qrInput.value = '';
@@ -438,6 +529,7 @@ class JLinkPOS {
 
         } catch (error) {
             this.updateScannerStatus(`Error: ${error.message}`, 'error');
+            this.addDebugLog(`❌ Manual scan error: ${error.message}`);
             console.error('QR scan error:', error);
         } finally {
             this.setProcessingState(false);
@@ -447,6 +539,7 @@ class JLinkPOS {
     showManualAddModal() {
         document.getElementById('manualAddModal').classList.add('active');
         document.getElementById('manualProductCode').focus();
+        this.addDebugLog("📱 Manual add modal opened");
     }
 
     hideManualAddModal() {
@@ -465,10 +558,12 @@ class JLinkPOS {
 
         if (!productCode) {
             alert('Please enter a product code');
+            this.addDebugLog("❌ Manual add: No product code");
             return;
         }
 
         this.setProcessingState(true);
+        this.addDebugLog(`🔍 Manual add: ${productCode} x${quantity}`);
 
         try {
             if (typeof productService === 'undefined') {
@@ -479,16 +574,19 @@ class JLinkPOS {
 
             if (product.quantity <= 0) {
                 alert(`Product out of stock: ${product.name}`);
+                this.addDebugLog(`❌ Manual add: ${product.name} out of stock`);
                 return;
             }
 
             cartManager.addItem(product, quantity);
             this.updateScannerStatus(`Added: ${product.name} x${quantity}`, 'ready');
+            this.addDebugLog(`🛒 Manual add successful: ${product.name} x${quantity}`);
             this.playSuccessSound();
             this.hideManualAddModal();
 
         } catch (error) {
             alert(`Error: ${error.message}`);
+            this.addDebugLog(`❌ Manual add error: ${error.message}`);
             console.error('Manual add error:', error);
         } finally {
             this.setProcessingState(false);
@@ -547,6 +645,7 @@ class JLinkPOS {
     }
 
     removeItem(productId) {
+        this.addDebugLog(`🗑️ Removing item: ${productId}`);
         cartManager.removeItem(productId);
     }
 
@@ -554,6 +653,7 @@ class JLinkPOS {
         const items = cartManager.getItems();
         const item = items.find(i => i.productId === productId);
         if (item) {
+            this.addDebugLog(`➕ Increasing quantity: ${item.name}`);
             cartManager.updateQuantity(productId, item.quantity + 1);
         }
     }
@@ -562,6 +662,7 @@ class JLinkPOS {
         const items = cartManager.getItems();
         const item = items.find(i => i.productId === productId);
         if (item) {
+            this.addDebugLog(`➖ Decreasing quantity: ${item.name}`);
             cartManager.updateQuantity(productId, item.quantity - 1);
         }
     }
@@ -569,6 +670,7 @@ class JLinkPOS {
     async handleCheckout() {
         if (cartManager.isEmpty()) {
             alert('Cart is empty!');
+            this.addDebugLog("❌ Checkout: Cart empty");
             return;
         }
 
@@ -576,12 +678,14 @@ class JLinkPOS {
         if (!customerEmail) {
             alert('Please enter customer email');
             document.getElementById('customerEmail').focus();
+            this.addDebugLog("❌ Checkout: No customer email");
             return;
         }
 
         if (!this.validateEmail(customerEmail)) {
             alert('Please enter a valid email address');
             document.getElementById('customerEmail').focus();
+            this.addDebugLog("❌ Checkout: Invalid email");
             return;
         }
 
@@ -589,11 +693,13 @@ class JLinkPOS {
         const customerName = document.getElementById('customerName').value.trim();
 
         if (!confirm(`Complete sale for LKR ${totals.total.toFixed(2)} to ${customerEmail}?\n\nThis will:\n• Send email receipt to customer\n• Update inventory quantities\n• Record sale in mobile app`)) {
+            this.addDebugLog("❌ Checkout: User cancelled");
             return;
         }
 
         this.setProcessingState(true);
         this.updateScannerStatus('Processing sale...', 'processing');
+        this.addDebugLog(`💰 Checkout started: LKR ${totals.total.toFixed(2)} to ${customerEmail}`);
 
         try {
             const saleData = {
@@ -610,6 +716,7 @@ class JLinkPOS {
             if (typeof salesService !== 'undefined') {
                 saleId = await salesService.processSale(saleData);
                 console.log("✅ Sale recorded in database:", saleId);
+                this.addDebugLog(`✅ Sale recorded: ${saleId}`);
             }
             
             saleData.saleId = saleId;
@@ -621,6 +728,7 @@ class JLinkPOS {
             if (typeof emailService !== 'undefined') {
                 emailSent = await emailService.sendReceiptEmail(customerEmail, saleData);
                 console.log("✅ Email sent:", emailSent);
+                this.addDebugLog(emailSent ? "✅ Email sent" : "❌ Email failed");
             }
 
             let successMessage = `Sale #${saleId} completed successfully!\nTotal: LKR ${totals.total.toFixed(2)}`;
@@ -631,6 +739,7 @@ class JLinkPOS {
             }
 
             this.showSuccessAnimation(successMessage);
+            this.addDebugLog(`🎉 Checkout completed: ${saleId}`);
             console.log("🎉 Checkout completed successfully");
 
             // Reset for next customer
@@ -639,10 +748,12 @@ class JLinkPOS {
                 document.getElementById('customerEmail').value = '';
                 document.getElementById('customerName').value = '';
                 this.updateScannerStatus('Ready for next customer!', 'ready');
+                this.addDebugLog("🔄 Cart reset for next customer");
             }, 3000);
 
         } catch (error) {
             console.error('Checkout error:', error);
+            this.addDebugLog(`❌ Checkout error: ${error.message}`);
             this.updateScannerStatus(`Checkout failed: ${error.message}`, 'error');
             alert(`Checkout failed: ${error.message}`);
         } finally {
@@ -656,12 +767,14 @@ class JLinkPOS {
         }
 
         if (confirm('Clear all items from cart?')) {
+            this.addDebugLog("🗑️ Clearing entire cart");
             cartManager.clearCart();
             this.updateScannerStatus('Cart cleared', 'ready');
         }
     }
 
     handleCancelLastItem() {
+        this.addDebugLog("↩️ Cancelling last item");
         cartManager.cancelLastItem();
         this.updateScannerStatus('Last item removed', 'ready');
     }
@@ -712,6 +825,7 @@ class JLinkPOS {
             targetScreen.classList.add('active');
         } else {
             console.error('Screen not found:', screenId);
+            this.addDebugLog(`❌ Screen not found: ${screenId}`);
         }
     }
 
@@ -720,6 +834,30 @@ class JLinkPOS {
         if (statusElement) {
             statusElement.textContent = message;
             statusElement.className = `scanner-status ${type}`;
+        }
+    }
+
+    updateDebugPanel(data) {
+        const pollingStatus = document.getElementById('pollingStatus');
+        const lastScanId = document.getElementById('lastScanId');
+        const totalScans = document.getElementById('totalScans');
+        
+        if (pollingStatus) {
+            pollingStatus.textContent = data.pollingStatus || 'Unknown';
+            pollingStatus.style.color = data.pollingStatus?.includes('Error') ? '#f44336' : 
+                                      data.pollingStatus?.includes('Active') ? '#4CAF50' : '#ff9800';
+        }
+        if (lastScanId && data.lastScanId !== undefined) {
+            lastScanId.textContent = data.lastScanId;
+        }
+        if (totalScans && data.totalScans !== undefined) {
+            totalScans.textContent = data.totalScans;
+        }
+    }
+
+    addDebugLog(message) {
+        if (window.addDebugLog) {
+            window.addDebugLog(message);
         }
     }
 
@@ -774,6 +912,7 @@ class JLinkPOS {
     // Cleanup when app is destroyed
     destroy() {
         this.stopPolling();
+        this.addDebugLog("🔴 App destroyed");
     }
 }
 
@@ -799,6 +938,7 @@ window.testScanner = (productCode = "RAPIDENE-001") => {
         app.handleQRScanManual(productCode);
     } else {
         console.error('App not ready');
+        window.addDebugLog && window.addDebugLog('❌ Test scanner: App not ready');
     }
 };
 
@@ -806,6 +946,7 @@ window.testScanner = (productCode = "RAPIDENE-001") => {
 window.testPolling = () => {
     if (app && typeof app.checkForNewScans === 'function') {
         console.log("🧪 Testing polling manually...");
+        window.addDebugLog && window.addDebugLog("🧪 Manual polling test");
         app.checkForNewScans();
     }
 };
@@ -813,5 +954,9 @@ window.testPolling = () => {
 // Quick test function
 window.quickTest = () => {
     console.log("🧪 Running quick test...");
+    window.addDebugLog && window.addDebugLog("🧪 Quick test started");
     window.testScanner("RAPIDENE-001");
 };
+
+// Make app globally available for debugging
+window.app = app;
