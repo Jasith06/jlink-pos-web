@@ -1,28 +1,30 @@
 // api/test.js
-export default function handler(req, res) {
-  console.log('✅ Test API called');
-  
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export default function handler(request, response) {
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (request.method === 'OPTIONS') {
+    return response.status(200).end();
   }
 
-  if (req.method === 'POST') {
-    console.log('📦 Request body:', req.body);
+  if (request.method === 'POST') {
+    console.log('✅ Test API - POST received:', request.body);
     
-    return res.json({
+    return response.status(200).json({
       success: true,
-      message: 'Test API is working!',
+      message: 'Test API is working perfectly!',
+      method: 'POST',
       timestamp: new Date().toISOString(),
-      your_data: req.body
+      received_data: request.body
     });
   }
 
-  return res.json({ 
+  // Handle GET requests
+  return response.status(200).json({
+    success: true,
     message: 'Test API is running!',
-    method: req.method 
+    method: 'GET',
+    timestamp: new Date().toISOString()
   });
 }
