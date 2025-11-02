@@ -5,14 +5,10 @@
   "main": "index.html",
   "scripts": {
     "dev": "python -m http.server 8000",
-    "build": "echo 'Building static site' && mkdir -p dist && cp -r *.html styles/ js/ api/ assets/ dist/ || true",
-    "start": "npx serve -s ."
+    "build": "echo 'Static site - no build needed'"
   },
   "dependencies": {
     "@emailjs/browser": "^3.11.0"
-  },
-  "devDependencies": {
-    "serve": "^14.0.0"
   },
   "keywords": [
     "pos",
