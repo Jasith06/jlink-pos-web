@@ -1,4 +1,4 @@
-// api/scanner.js
+// api/scanner.js - MAIN SCANNER API
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,19 +26,42 @@ export default async function handler(req, res) {
       // Extract product code
       const productCode = extractProductCode(qr_code);
 
-      // ✅ CRITICAL FIX: Store scan in Firebase for real-time sync
-      await storeScanInFirebase(qr_code, productCode, scanner_id);
+      // ✅ Store scan data globally (for web app to poll)
+      if (!global.scannerData) {
+        global.scannerData = [];
+      }
+
+      const scanData = {
+        id: Date.now() + Math.random(),
+        type: 'SCANNER_DATA',
+        data: {
+          qr_code: qr_code,
+          product_code: productCode,
+          scanner_id: scanner_id || 'ESP32_GM67',
+          timestamp: timestamp || Date.now(),
+          received_at: new Date().toISOString()
+        }
+      };
+
+      global.scannerData.push(scanData);
+      
+      // Keep only last 20 scans
+      if (global.scannerData.length > 20) {
+        global.scannerData = global.scannerData.slice(-20);
+      }
+
+      console.log('✅ Scan stored. Total scans:', global.scannerData.length);
 
       const response = {
         success: true,
-        message: 'QR code received and processed!',
+        message: 'QR code received and stored!',
         qr_code: qr_code,
         product_code: productCode,
         scanner_id: scanner_id || 'ESP32_GM67',
         timestamp: timestamp || Date.now(),
         received_at: new Date().toISOString(),
-        status: 'processed',
-        firebase_stored: true
+        stored_scans: global.scannerData.length,
+        status: 'stored'
       };
 
       console.log('✅ Scanner API - Success:', response);
@@ -60,7 +83,7 @@ export default async function handler(req, res) {
     message: 'JLINK POS Scanner API is running!',
     method: 'GET',
     timestamp: new Date().toISOString(),
-    version: '1.0'
+    stored_scans: global.scannerData ? global.scannerData.length : 0
   });
 }
 
@@ -88,28 +111,4 @@ function extractProductCode(qrData) {
   }
   
   return qrData;
-}
-
-// ✅ NEW: Store scan in Firebase for real-time updates
-async function storeScanInFirebase(qrCode, productCode, scannerId) {
-  try {
-    // For server-side Firebase, you'd use the admin SDK
-    // Since we're in Vercel functions, we'll use fetch to your own API
-    const firebaseUrl = 'https://jlink-38a3d-default-rtdb.asia-southeast1.firebasedatabase.app';
-    const scanData = {
-      qr_code: qrCode,
-      product_code: productCode,
-      scanner_id: scannerId,
-      timestamp: new Date().toISOString(),
-      status: 'pending_processing'
-    };
-
-    // This is a placeholder - in production, use Firebase Admin SDK
-    console.log('📦 Would store in Firebase:', scanData);
-    
-    return true;
-  } catch (error) {
-    console.error('Firebase storage error:', error);
-    throw error;
-  }
 }
