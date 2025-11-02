@@ -4,15 +4,14 @@ class JLinkPOS {
         this.isProcessing = false;
         this.scannerAPIUrl = '';
         this.authStateChecked = false;
-        this.lastScanCheck = 0;
-        this.pendingScans = [];
-        this.scanCheckInterval = null;
+        this.lastScanId = 0;
+        this.pollInterval = null;
 
         this.initializeApp();
     }
 
     initializeApp() {
-        console.log("🚀 JLINK POS App Starting on Vercel...");
+        console.log("🚀 JLINK POS App Starting...");
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -30,7 +29,6 @@ class JLinkPOS {
             this.setupEventListeners();
             this.checkAuthState();
             this.setScannerAPIUrl();
-            this.setupScannerAPI();
             
             // Initialize EmailJS if available
             if (typeof emailjs !== 'undefined') {
@@ -47,36 +45,11 @@ class JLinkPOS {
     setScannerAPIUrl() {
         const baseUrl = window.location.origin;
         this.scannerAPIUrl = `${baseUrl}/api/scanner`;
-        console.log("📡 Scanner API URL:", this.scannerAPIUrl);
-    }
-
-    setupScannerAPI() {
-        console.log("🔧 Setting up scanner API integration...");
-        
-        // Global function to handle scanner data from ESP32
-        window.handleScannerData = async (scannerData) => {
-            console.log("📱 Scanner data received via API:", scannerData);
-            await this.processScannerInput(scannerData);
-        };
-
-        // Test function for manual testing
-        window.testScanner = (productCode = "RAPIDENE-001") => {
-            console.log("🧪 Testing scanner with product:", productCode);
-            const testData = {
-                qr_code: productCode,
-                product_code: productCode,
-                scanner_id: "TEST_SCANNER",
-                timestamp: Date.now()
-            };
-            window.handleScannerData(testData);
-        };
-
-        // Manual scan trigger
-        window.manualScan = (productCode) => {
-            this.handleQRScanManual(productCode);
-        };
-
-        console.log("✅ Scanner API integration ready");
+        this.pollingUrl = `${baseUrl}/api/get-scans`;
+        console.log("📡 API URLs:", {
+            scanner: this.scannerAPIUrl,
+            polling: this.pollingUrl
+        });
     }
 
     setupEventListeners() {
@@ -135,105 +108,110 @@ class JLinkPOS {
         console.log("✅ Event listeners setup complete");
     }
 
-    async processScannerInput(scannerData) {
-        if (this.isProcessing) {
-            console.log("⚠️ Scanner: System busy, please wait");
-            return;
+    startPollingForScans() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
         }
 
-        this.setProcessingState(true);
-        this.updateScannerStatus('Processing scanner input...', 'processing');
+        console.log("🔍 Starting to poll for scanner data...");
+        
+        this.pollInterval = setInterval(() => {
+            this.checkForNewScans();
+        }, 2000);
+
+        this.updateScannerStatus('🔍 Polling for scanner data...', 'processing');
+    }
+
+    stopPolling() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+        console.log("🔍 Stopped polling for scanner data");
+    }
+
+    async checkForNewScans() {
+        if (!this.currentUser) return;
 
         try {
-            console.log("🔍 Processing scanner data:", scannerData);
+            const response = await fetch(`${this.pollingUrl}?last_id=${this.lastScanId}&t=${Date.now()}`);
             
-            let productCode = scannerData.qr_code || scannerData.product_code;
-            
-            if (!productCode) {
-                throw new Error('No product code in scanner data');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
             }
 
-            console.log("🔍 Looking up product:", productCode);
+            const data = await response.json();
             
-            if (typeof productService !== 'undefined') {
-                const product = await productService.findProductByCode(productCode);
-                console.log("✅ Product found:", product);
-
-                if (product.quantity <= 0) {
-                    this.updateScannerStatus(`Scanner: ${product.name} - Out of stock`, 'error');
-                    this.showScanErrorNotification(`${product.name} is out of stock`);
-                    return;
-                }
-
-                // Add to cart
-                cartManager.addItem(product, 1);
-                this.updateScannerStatus(`Scanner: ${product.name} added to cart`, 'ready');
+            if (data.success && data.data && data.data.length > 0) {
+                console.log(`📱 Received ${data.data.length} new scans from server`);
                 
-                // Play success sound
-                this.playSuccessSound();
-
-                // Show success notification
-                this.showScanSuccessNotification(product.name);
-
-            } else {
-                throw new Error('Product service not available');
+                // Process each new scan
+                for (const scanData of data.data) {
+                    await this.processScanData(scanData);
+                }
+                
+                // Update last ID
+                this.lastScanId = data.last_id;
+                this.updateScannerStatus(`✅ Real-time: ${data.data.length} new scans processed`, 'ready');
             }
 
         } catch (error) {
-            console.error('❌ Scanner processing error:', error);
-            this.updateScannerStatus(`Scanner error: ${error.message}`, 'error');
-            this.showScanErrorNotification(error.message);
-        } finally {
-            this.setProcessingState(false);
+            console.log("❌ Polling error:", error.message);
+            this.updateScannerStatus(`❌ Polling error: ${error.message}`, 'error');
         }
     }
 
-    showScanSuccessNotification(productName) {
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #4CAF50;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
-            font-weight: bold;
-            animation: slideInRight 0.3s ease;
-        `;
-        notification.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.2em;">✅</span>
-                <div>
-                    <div>Product Added to Cart!</div>
-                    <div style="font-size: 0.9em; opacity: 0.9;">${this.escapeHtml(productName)}</div>
-                </div>
-            </div>
-        `;
+    async processScanData(scanData) {
+        console.log("🔄 Processing scan data:", scanData);
 
-        document.body.appendChild(notification);
+        if (scanData.type === 'SCANNER_DATA' && scanData.data) {
+            const scannerData = scanData.data;
+            
+            console.log("📱 Scanner data received:", scannerData);
 
-        setTimeout(() => {
-            if (document.body.contains(notification)) {
-                notification.style.animation = 'slideOutRight 0.3s ease';
-                setTimeout(() => {
-                    if (document.body.contains(notification)) {
-                        document.body.removeChild(notification);
+            try {
+                // Extract product code
+                const productCode = scannerData.product_code || scannerData.qr_code;
+                
+                if (typeof productService !== 'undefined') {
+                    const product = await productService.findProductByCode(productCode);
+                    console.log("✅ Product found via real-time scan:", product);
+
+                    if (product.quantity <= 0) {
+                        this.showNotification(`${product.name} - Out of stock`, 'error');
+                        return;
                     }
-                }, 300);
+
+                    // Add to cart
+                    cartManager.addItem(product, 1);
+                    this.showNotification(`🔗 SCANNER: ${product.name} added to cart`, 'success');
+                    
+                    // Play success sound
+                    this.playSuccessSound();
+
+                } else {
+                    throw new Error('Product service not available');
+                }
+
+            } catch (error) {
+                console.error('❌ Scan processing error:', error);
+                this.showNotification(`Scanner error: ${error.message}`, 'error');
             }
-        }, 3000);
+        }
     }
 
-    showScanErrorNotification(errorMessage) {
+    showNotification(message, type = 'info') {
         const notification = document.createElement('div');
+        const bgColor = type === 'success' ? '#4CAF50' : 
+                        type === 'error' ? '#f44336' : '#2196F3';
+        const icon = type === 'success' ? '✅' : 
+                    type === 'error' ? '❌' : '📱';
+
         notification.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
-            background: #f44336;
+            background: ${bgColor};
             color: white;
             padding: 15px 20px;
             border-radius: 8px;
@@ -241,13 +219,16 @@ class JLinkPOS {
             z-index: 1000;
             font-weight: bold;
             animation: slideInRight 0.3s ease;
+            max-width: 300px;
         `;
         notification.innerHTML = `
             <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.2em;">❌</span>
-                <div>
-                    <div>Scan Error</div>
-                    <div style="font-size: 0.9em; opacity: 0.9;">${this.escapeHtml(errorMessage)}</div>
+                <span style="font-size: 1.2em;">${icon}</span>
+                <div style="flex: 1;">
+                    <div>${this.escapeHtml(message)}</div>
+                    <div style="font-size: 0.8em; opacity: 0.9; margin-top: 4px;">
+                        ${new Date().toLocaleTimeString()}
+                    </div>
                 </div>
             </div>
         `;
@@ -264,15 +245,6 @@ class JLinkPOS {
                 }, 300);
             }
         }, 4000);
-    }
-
-    // Manual QR scan simulation
-    handleQRScanManual(productCode) {
-        const qrInput = document.getElementById('qrInput');
-        if (qrInput) {
-            qrInput.value = productCode;
-            this.handleQRScan();
-        }
     }
 
     playSuccessSound() {
@@ -379,6 +351,7 @@ class JLinkPOS {
     }
 
     async handleLogout() {
+        this.stopPolling();
         try {
             await window.auth.signOut();
             this.updateScannerStatus('Logged out successfully', 'ready');
@@ -399,13 +372,6 @@ class JLinkPOS {
         if (typeof salesService !== 'undefined') {
             salesService.setUser(user);
         }
-        
-        // ✅ NEW: Start scanner listener if available
-        if (typeof scannerListener !== 'undefined') {
-            scannerListener.setUser(user);
-            scannerListener.startListening();
-            console.log("✅ Scanner listener started");
-        }
 
         // Update UI
         const currentUserElement = document.getElementById('currentUser');
@@ -415,10 +381,9 @@ class JLinkPOS {
 
         this.showScreen('posScreen');
         this.setLoadingState(false);
-        this.updateScannerStatus('Ready to scan QR codes - ESP32 connected', 'ready');
-
-        // Add scanner status indicator
-        this.addScannerStatusIndicator();
+        
+        // ✅ START POLLING FOR SCANNER DATA
+        this.startPollingForScans();
 
         // Focus on QR input
         setTimeout(() => {
@@ -427,44 +392,6 @@ class JLinkPOS {
                 qrInput.focus();
             }
         }, 100);
-    }
-
-    addScannerStatusIndicator() {
-        // Add a visual indicator that scanner is ready
-        const scannerSection = document.querySelector('.scanner-section');
-        if (scannerSection && !document.getElementById('scannerReadyIndicator')) {
-            const indicator = document.createElement('div');
-            indicator.id = 'scannerReadyIndicator';
-            indicator.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 12px; background: #e8f5e8; border: 1px solid #4CAF50; border-radius: 6px; font-size: 0.9em;">
-                    <div style="width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; animation: pulse 2s infinite;"></div>
-                    <span style="color: #2e7d32;">Scanner Ready - ESP32 Connected</span>
-                </div>
-            `;
-            scannerSection.appendChild(indicator);
-
-            // Add CSS for pulse animation
-            if (!document.getElementById('scannerStyles')) {
-                const style = document.createElement('style');
-                style.id = 'scannerStyles';
-                style.textContent = `
-                    @keyframes pulse {
-                        0% { opacity: 1; }
-                        50% { opacity: 0.5; }
-                        100% { opacity: 1; }
-                    }
-                    @keyframes slideInRight {
-                        from { transform: translateX(100%); opacity: 0; }
-                        to { transform: translateX(0); opacity: 1; }
-                    }
-                    @keyframes slideOutRight {
-                        from { transform: translateX(0); opacity: 1; }
-                        to { transform: translateX(100%); opacity: 0; }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-        }
     }
 
     handleAuthFailure() {
@@ -846,14 +773,7 @@ class JLinkPOS {
 
     // Cleanup when app is destroyed
     destroy() {
-        if (this.scanCheckInterval) {
-            clearInterval(this.scanCheckInterval);
-        }
-        
-        // Stop scanner listener if available
-        if (typeof scannerListener !== 'undefined') {
-            scannerListener.stopListening();
-        }
+        this.stopPolling();
     }
 }
 
@@ -882,24 +802,16 @@ window.testScanner = (productCode = "RAPIDENE-001") => {
     }
 };
 
-// Manual scan simulation for testing
-window.simulateScan = (productCode) => {
-    const testData = {
-        qr_code: productCode,
-        product_code: productCode,
-        scanner_id: "TEST_SCANNER",
-        timestamp: Date.now()
-    };
-    
-    if (window.handleScannerData) {
-        window.handleScannerData(testData);
-    } else {
-        console.error('Scanner handler not available');
+// Test polling manually
+window.testPolling = () => {
+    if (app && typeof app.checkForNewScans === 'function') {
+        console.log("🧪 Testing polling manually...");
+        app.checkForNewScans();
     }
 };
 
 // Quick test function
 window.quickTest = () => {
-    console.log("🧪 Running quick scanner test...");
+    console.log("🧪 Running quick test...");
     window.testScanner("RAPIDENE-001");
 };
