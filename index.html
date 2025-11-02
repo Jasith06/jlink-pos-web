@@ -57,6 +57,14 @@
                         <button id="manualAddBtn" class="btn-secondary">Manual Add</button>
                     </div>
                     <div class="scanner-status" id="scannerStatus">Ready to scan...</div>
+                    
+                    <!-- Scanner Connection Status -->
+                    <div id="scannerConnection" style="margin-top: 10px; padding: 10px; border-radius: 8px; background: #e8f5e8; border: 1px solid #4CAF50;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; animation: pulse 2s infinite;"></div>
+                            <span style="color: #2e7d32; font-weight: 500;">🔄 Polling for GM67 Scanner...</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Cart Section -->
@@ -125,6 +133,28 @@
         </div>
     </div>
 
+    <!-- Debug Panel -->
+    <div id="debugPanel" style="position: fixed; bottom: 10px; right: 10px; background: #333; color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 1000; max-width: 300px; border: 1px solid #555;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <strong>🔧 Debug Panel</strong>
+            <button onclick="toggleDebug()" style="background: #666; color: white; border: none; padding: 2px 5px; border-radius: 3px; font-size: 10px;">Toggle</button>
+        </div>
+        <div id="debugContent" style="display: none;">
+            <div style="margin-bottom: 5px;">
+                <div>Polling: <span id="pollingStatus" style="color: #4CAF50;">Stopped</span></div>
+                <div>Last Scan ID: <span id="lastScanId" style="color: #ff9800;">0</span></div>
+                <div>Total Scans: <span id="totalScans" style="color: #2196F3;">0</span></div>
+            </div>
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                <button onclick="testPolling()" style="background: #4CAF50; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Test Poll</button>
+                <button onclick="testScanner()" style="background: #2196F3; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Test Scan</button>
+                <button onclick="clearDebug()" style="background: #f44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Clear</button>
+                <button onclick="checkAPI()" style="background: #ff9800; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Check API</button>
+            </div>
+            <div id="debugLog" style="margin-top: 5px; max-height: 100px; overflow-y: auto; font-size: 10px; color: #ccc;"></div>
+        </div>
+    </div>
+
     <!-- JavaScript Files -->
     <script src="./js/firebase-config.js"></script>
     <script src="./js/product-service.js"></script>
@@ -161,11 +191,79 @@
             }
         });
 
+        // Debug panel functions
+        function toggleDebug() {
+            const content = document.getElementById('debugContent');
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function testPolling() {
+            if (window.app && typeof window.app.checkForNewScans === 'function') {
+                addDebugLog("🧪 Manual polling test triggered");
+                window.app.checkForNewScans();
+            } else {
+                addDebugLog("❌ App not ready for polling");
+            }
+        }
+
+        function testScanner() {
+            if (window.testScanner) {
+                addDebugLog("🧪 Test scan triggered");
+                window.testScanner("RAPIDENE-001");
+            } else {
+                addDebugLog("❌ Test scanner not available");
+            }
+        }
+
+        function clearDebug() {
+            addDebugLog("🧹 Debug cleared");
+            const debugLog = document.getElementById('debugLog');
+            if (debugLog) {
+                debugLog.innerHTML = '';
+            }
+        }
+
+        function checkAPI() {
+            addDebugLog("🔗 Checking API status...");
+            fetch('/api/scanner')
+                .then(response => response.json())
+                .then(data => {
+                    addDebugLog(`✅ API Status: ${data.message}`);
+                    addDebugLog(`📊 Stored scans: ${data.stored_scans}`);
+                })
+                .catch(error => {
+                    addDebugLog(`❌ API Check failed: ${error.message}`);
+                });
+        }
+
+        function addDebugLog(message) {
+            const debugLog = document.getElementById('debugLog');
+            if (debugLog) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                debugLog.appendChild(logEntry);
+                debugLog.scrollTop = debugLog.scrollHeight;
+            }
+            console.log(`🔧 ${message}`);
+        }
+
         // Global error handler
         window.addEventListener('error', function(e) {
             console.error('Global error:', e.error);
+            addDebugLog(`❌ Error: ${e.error}`);
         });
-    </script>
-</body>
 
+        // Make functions globally available
+        window.addDebugLog = addDebugLog;
+    </script>
+
+    <style>
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</body>
 </html>
