@@ -30,6 +30,7 @@ class JLinkPOS {
             this.setupEventListeners();
             this.checkAuthState();
             this.setScannerAPIUrl();
+            this.setupScannerAPI(); // Initialize scanner API
             this.setupScannerWebhookListener();
             
             if (typeof emailjs !== 'undefined') {
@@ -45,8 +46,58 @@ class JLinkPOS {
 
     setScannerAPIUrl() {
         const baseUrl = window.location.origin;
-        this.scannerAPIUrl = `${baseUrl}/api/scanner-webhook`;
+        this.scannerAPIUrl = `${baseUrl}/api/scanner`;
         console.log("📡 Scanner API URL:", this.scannerAPIUrl);
+    }
+
+    setupScannerAPI() {
+        console.log("🔧 Setting up scanner API integration...");
+        
+        // Global function to handle scanner data from ESP32
+        window.handleScannerData = async (scannerData) => {
+            console.log("📱 Scanner data received via API:", scannerData);
+            await this.processScannerInput(scannerData);
+        };
+
+        // Test function for manual testing
+        window.testScanner = (productCode = "RAPIDENE-001") => {
+            console.log("🧪 Testing scanner with product:", productCode);
+            const testData = {
+                qr_code: productCode,
+                product_code: productCode,
+                scanner_id: "TEST_SCANNER",
+                timestamp: Date.now()
+            };
+            window.handleScannerData(testData);
+        };
+
+        // Manual scan trigger
+        window.manualScan = (productCode) => {
+            this.handleQRScanManual(productCode);
+        };
+
+        console.log("✅ Scanner API integration ready");
+    }
+
+    setupScannerWebhookListener() {
+        // Check for scanner data every 3 seconds
+        this.scanCheckInterval = setInterval(() => {
+            this.checkForScannerData();
+        }, 3000);
+
+        console.log("🔍 Scanner webhook listener started");
+    }
+
+    async checkForScannerData() {
+        if (!this.currentUser) return;
+
+        try {
+            // In a real implementation, you would check Firebase for new scans
+            // For now, this is a placeholder for future real-time updates
+            // console.log("🔍 Checking for scanner data...");
+        } catch (error) {
+            console.log("Scanner check error:", error.message);
+        }
     }
 
     setupEventListeners() {
@@ -98,63 +149,7 @@ class JLinkPOS {
             cartManager.onCartUpdate((items, totals) => this.updateCartDisplay(items, totals));
         }
 
-        this.setupScannerAPI();
         console.log("✅ Event listeners setup complete");
-    }
-
-    setupScannerAPI() {
-        // Global function for ESP32 to call via API
-        window.handleScannerData = async (scannerData) => {
-            console.log("📱 Scanner data received via API:", scannerData);
-            await this.processScannerInput(scannerData);
-        };
-
-        // Test function for manual testing
-        window.testScannerAPI = async () => {
-            const testData = {
-                qr_code: "RAPIDENE-001",
-                product_code: "RAPIDENE-001",
-                scanner_id: "ESP32_TEST",
-                timestamp: Date.now()
-            };
-            await this.processScannerInput(testData);
-        };
-
-        // Manual scan trigger for testing
-        window.manualScan = (productCode) => {
-            this.handleQRScanManual(productCode);
-        };
-
-        console.log("✅ Scanner API ready");
-    }
-
-    setupScannerWebhookListener() {
-        // Check for scanner data every 3 seconds
-        this.scanCheckInterval = setInterval(() => {
-            this.checkForScannerData();
-        }, 3000);
-
-        console.log("🔍 Scanner webhook listener started");
-    }
-
-    async checkForScannerData() {
-        if (!this.currentUser) return;
-
-        try {
-            // In a real implementation, you would check your database for new scans
-            // For now, we'll simulate checking for data
-            // console.log("🔍 Checking for scanner data...");
-            
-            // You could implement a Firebase listener here:
-            // if (window.database && this.currentUser) {
-            //     const scansRef = window.database.ref(`scanner_data/${this.currentUser.uid}`);
-            //     scansRef.on('value', (snapshot) => {
-            //         // Handle new scanner data
-            //     });
-            // }
-        } catch (error) {
-            console.log("Scanner check error:", error.message);
-        }
     }
 
     async processScannerInput(scannerData) {
@@ -183,6 +178,7 @@ class JLinkPOS {
 
                 if (product.quantity <= 0) {
                     this.updateScannerStatus(`Scanner: ${product.name} - Out of stock`, 'error');
+                    this.showScanErrorNotification(`${product.name} is out of stock`);
                     return;
                 }
 
@@ -203,8 +199,6 @@ class JLinkPOS {
         } catch (error) {
             console.error('❌ Scanner processing error:', error);
             this.updateScannerStatus(`Scanner error: ${error.message}`, 'error');
-            
-            // Show error notification
             this.showScanErrorNotification(error.message);
         } finally {
             this.setProcessingState(false);
@@ -212,7 +206,6 @@ class JLinkPOS {
     }
 
     showScanSuccessNotification(productName) {
-        // Create a temporary success notification
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed;
@@ -231,7 +224,7 @@ class JLinkPOS {
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="font-size: 1.2em;">✅</span>
                 <div>
-                    <div>Product Added!</div>
+                    <div>Product Added to Cart!</div>
                     <div style="font-size: 0.9em; opacity: 0.9;">${this.escapeHtml(productName)}</div>
                 </div>
             </div>
@@ -239,7 +232,6 @@ class JLinkPOS {
 
         document.body.appendChild(notification);
 
-        // Remove after 3 seconds
         setTimeout(() => {
             if (document.body.contains(notification)) {
                 notification.style.animation = 'slideOutRight 0.3s ease';
@@ -279,7 +271,6 @@ class JLinkPOS {
 
         document.body.appendChild(notification);
 
-        // Remove after 4 seconds
         setTimeout(() => {
             if (document.body.contains(notification)) {
                 notification.style.animation = 'slideOutRight 0.3s ease';
@@ -292,7 +283,7 @@ class JLinkPOS {
         }, 4000);
     }
 
-    // New method for manual QR scan simulation
+    // Manual QR scan simulation
     handleQRScanManual(productCode) {
         const qrInput = document.getElementById('qrInput');
         if (qrInput) {
@@ -911,4 +902,10 @@ window.simulateScan = (productCode) => {
     } else {
         console.error('Scanner handler not available');
     }
+};
+
+// Quick test function
+window.quickTest = () => {
+    console.log("🧪 Running quick scanner test...");
+    window.testScanner("RAPIDENE-001");
 };
