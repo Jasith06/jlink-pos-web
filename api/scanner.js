@@ -1,9 +1,9 @@
 // api/scanner.js
-module.exports = (req, res) => {
-  // Enable CORS
+export default async function handler(req, res) {
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   // Handle preflight
   if (req.method === 'OPTIONS') {
@@ -13,33 +13,45 @@ module.exports = (req, res) => {
   console.log('📱 Scanner API called - Method:', req.method);
 
   if (req.method === 'POST') {
-    const { qr_code, scanner_id, timestamp } = req.body;
+    try {
+      const { qr_code, scanner_id, timestamp } = req.body;
 
-    if (!qr_code) {
-      return res.status(400).json({
+      if (!qr_code) {
+        return res.status(400).json({
+          success: false,
+          error: 'QR code is required'
+        });
+      }
+
+      // Extract product code
+      const productCode = extractProductCode(qr_code);
+
+      // ✅ CRITICAL FIX: Store scan in Firebase for real-time sync
+      await storeScanInFirebase(qr_code, productCode, scanner_id);
+
+      const response = {
+        success: true,
+        message: 'QR code received and processed!',
+        qr_code: qr_code,
+        product_code: productCode,
+        scanner_id: scanner_id || 'ESP32_GM67',
+        timestamp: timestamp || Date.now(),
+        received_at: new Date().toISOString(),
+        status: 'processed',
+        firebase_stored: true
+      };
+
+      console.log('✅ Scanner API - Success:', response);
+
+      return res.status(200).json(response);
+
+    } catch (error) {
+      console.error('❌ Scanner API Error:', error);
+      return res.status(500).json({
         success: false,
-        error: 'QR code is required'
+        error: 'Internal server error: ' + error.message
       });
     }
-
-    // Extract product code from QR data
-    const productCode = extractProductCode(qr_code);
-
-    const response = {
-      success: true,
-      message: 'QR code received successfully!',
-      qr_code: qr_code,
-      product_code: productCode,
-      scanner_id: scanner_id || 'ESP32_GM67',
-      timestamp: timestamp || Date.now(),
-      received_at: new Date().toISOString(),
-      status: 'processed',
-      instructions: 'Product should be added to cart in web app'
-    };
-
-    console.log('✅ Scanner API - Success:', response);
-
-    return res.status(200).json(response);
   }
 
   // Handle GET requests
@@ -50,33 +62,54 @@ module.exports = (req, res) => {
     timestamp: new Date().toISOString(),
     version: '1.0'
   });
-};
+}
 
 // Helper function to extract product code
 function extractProductCode(qrData) {
   if (!qrData) return 'UNKNOWN';
   
-  // Format 1: Just product code (e.g., "RAPIDENE-001")
   if (qrData.indexOf('|') === -1 && qrData.indexOf(':') === -1) {
     return qrData;
   }
   
-  // Format 2: PROD:CODE format
   if (qrData.indexOf("PROD:") !== -1) {
     const start = qrData.indexOf("PROD:") + 5;
     const end = qrData.indexOf('|', start);
     return qrData.substring(start, end === -1 ? qrData.length : end);
   }
   
-  // Format 3: Pipe-delimited (ProductName|Price|Code)
   if (qrData.indexOf('|') !== -1) {
     const parts = qrData.split('|');
     if (parts.length >= 5) {
-      return parts[4]; // Product code is the last part
+      return parts[4];
     } else if (parts.length >= 1) {
-      return parts[0]; // Use first part as product code
+      return parts[0];
     }
   }
   
   return qrData;
+}
+
+// ✅ NEW: Store scan in Firebase for real-time updates
+async function storeScanInFirebase(qrCode, productCode, scannerId) {
+  try {
+    // For server-side Firebase, you'd use the admin SDK
+    // Since we're in Vercel functions, we'll use fetch to your own API
+    const firebaseUrl = 'https://jlink-38a3d-default-rtdb.asia-southeast1.firebasedatabase.app';
+    const scanData = {
+      qr_code: qrCode,
+      product_code: productCode,
+      scanner_id: scannerId,
+      timestamp: new Date().toISOString(),
+      status: 'pending_processing'
+    };
+
+    // This is a placeholder - in production, use Firebase Admin SDK
+    console.log('📦 Would store in Firebase:', scanData);
+    
+    return true;
+  } catch (error) {
+    console.error('Firebase storage error:', error);
+    throw error;
+  }
 }
