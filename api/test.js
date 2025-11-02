@@ -1,30 +1,33 @@
-// api/test.js
-export default function handler(request, response) {
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+// api/test.js - TEST API
+export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  if (request.method === 'OPTIONS') {
-    return response.status(200).end();
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  if (request.method === 'POST') {
-    console.log('✅ Test API - POST received:', request.body);
-    
-    return response.status(200).json({
+  console.log('🧪 Test API called');
+
+  if (req.method === 'POST') {
+    return res.status(200).json({
       success: true,
       message: 'Test API is working perfectly!',
       method: 'POST',
       timestamp: new Date().toISOString(),
-      received_data: request.body
+      received_data: req.body
     });
   }
 
   // Handle GET requests
-  return response.status(200).json({
+  return res.status(200).json({
     success: true,
-    message: 'Test API is running!',
+    message: 'JLINK POS Test API is running!',
     method: 'GET',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    version: '2.0'
   });
 }
