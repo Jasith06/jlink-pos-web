@@ -10,6 +10,78 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    
+    <style>
+        /* Debug Styles */
+        .debug-panel {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            z-index: 10000;
+            max-width: 400px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #00ff00;
+        }
+        
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 5px;
+        }
+        
+        .debug-content {
+            line-height: 1.4;
+        }
+        
+        .debug-line {
+            margin: 2px 0;
+        }
+        
+        .debug-success { color: #00ff00; }
+        .debug-error { color: #ff0000; }
+        .debug-warning { color: #ffff00; }
+        .debug-info { color: #00ffff; }
+        
+        .debug-toggle {
+            background: #333;
+            color: white;
+            border: 1px solid #00ff00;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .debug-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .debug-btn {
+            background: #444;
+            color: white;
+            border: 1px solid #666;
+            padding: 3px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        
+        .debug-btn:hover {
+            background: #555;
+        }
+    </style>
 </head>
 <body>
     <div id="app">
@@ -30,17 +102,26 @@
             <div class="login-container">
                 <h2>JLINK POS Login</h2>
                 <div class="login-form">
-                    <input type="email" id="loginEmail" placeholder="Email" class="form-input">
+                    <input type="email" id="loginEmail" placeholder="Email" class="form-input" value="test@example.com">
                     
                     <!-- Password Input with Toggle -->
                     <div class="password-container">
-                        <input type="password" id="loginPassword" placeholder="Password" class="form-input password-input">
+                        <input type="password" id="loginPassword" placeholder="Password" class="form-input password-input" value="password">
                         <button type="button" class="password-toggle" id="passwordToggle">
                             <span class="eye-icon">👁️</span>
                         </button>
                     </div>
 
                     <button id="loginBtn" class="btn-primary">Login to POS</button>
+                    
+                    <!-- Demo Credentials -->
+                    <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4285F4;">
+                        <div style="font-size: 14px; color: #666; margin-bottom: 8px;">💡 <strong>Demo Access:</strong></div>
+                        <div style="font-size: 12px; color: #888;">
+                            Use any email/password for testing<br>
+                            Scanner: GM67 connected to ESP32
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -58,18 +139,18 @@
                     </div>
                     <div class="scanner-status" id="scannerStatus">Ready to scan...</div>
                     
-                    <!-- Scanner Connection Status -->
-                    <div id="scannerConnection" style="margin-top: 10px; padding: 10px; border-radius: 8px; background: #e8f5e8; border: 1px solid #4CAF50;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <div style="width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; animation: pulse 2s infinite;"></div>
-                            <span style="color: #2e7d32; font-weight: 500;">🔄 Polling for GM67 Scanner...</span>
+                    <!-- Scanner Info -->
+                    <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 6px; border: 1px solid #4CAF50;">
+                        <div style="font-size: 14px; color: #2e7d32;">
+                            <strong>GM67 Scanner Status:</strong>
+                            <div id="scannerConnection">🔴 Disconnected</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Cart Section -->
                 <div class="cart-section">
-                    <h2>Shopping Cart</h2>
+                    <h2>Shopping Cart <span id="cartBadge" style="background: #f44336; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; display: none;">0</span></h2>
                     <div class="cart-items" id="cartItems">
                         <div class="cart-empty">
                             <div class="icon">🛒</div>
@@ -95,8 +176,8 @@
                 <div class="actions-section">
                     <div class="customer-info">
                         <h3>Customer Information</h3>
-                        <input type="email" id="customerEmail" placeholder="Customer Email" class="form-input">
-                        <input type="text" id="customerName" placeholder="Customer Name (Optional)" class="form-input">
+                        <input type="email" id="customerEmail" placeholder="Customer Email" class="form-input" value="customer@example.com">
+                        <input type="text" id="customerName" placeholder="Customer Name (Optional)" class="form-input" value="Test Customer">
                     </div>
 
                     <div class="action-buttons">
@@ -113,6 +194,19 @@
                         <div class="stat-item">
                             <span>Cart Value:</span>
                             <span id="cartValue">LKR 0.00</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Test Buttons -->
+                    <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px; border: 1px solid #b3e0ff;">
+                        <div style="font-size: 14px; color: #0066cc; margin-bottom: 10px;">
+                            <strong>🧪 Quick Test:</strong>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button onclick="testProduct('RAPIDENE-001')" class="debug-btn" style="background: #4CAF50;">Test RAPIDENE</button>
+                            <button onclick="testProduct('PARACETAMOL-001')" class="debug-btn" style="background: #2196F3;">Test PARACETAMOL</button>
+                            <button onclick="testProduct('DOMPERIDONE-001')" class="debug-btn" style="background: #FF9800;">Test DOMPERIDONE</button>
+                            <button onclick="testPolling()" class="debug-btn" style="background: #9C27B0;">Test Polling</button>
                         </div>
                     </div>
                 </div>
@@ -134,24 +228,30 @@
     </div>
 
     <!-- Debug Panel -->
-    <div id="debugPanel" style="position: fixed; bottom: 10px; right: 10px; background: #333; color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 1000; max-width: 300px; border: 1px solid #555;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-            <strong>🔧 Debug Panel</strong>
-            <button onclick="toggleDebug()" style="background: #666; color: white; border: none; padding: 2px 5px; border-radius: 3px; font-size: 10px;">Toggle</button>
+    <div id="debugPanel" class="debug-panel">
+        <div class="debug-header">
+            <strong>🔧 DEBUG PANEL</strong>
+            <button class="debug-toggle" onclick="toggleDebug()">Toggle</button>
         </div>
-        <div id="debugContent" style="display: none;">
-            <div style="margin-bottom: 5px;">
-                <div>Polling: <span id="pollingStatus" style="color: #4CAF50;">Stopped</span></div>
-                <div>Last Scan ID: <span id="lastScanId" style="color: #ff9800;">0</span></div>
-                <div>Total Scans: <span id="totalScans" style="color: #2196F3;">0</span></div>
+        <div id="debugContent" class="debug-content">
+            <div class="debug-line debug-info">System: Initializing...</div>
+            <div class="debug-line debug-info">Polling: <span id="debugPollingStatus">Stopped</span></div>
+            <div class="debug-line debug-info">Last Scan ID: <span id="debugLastScanId">0</span></div>
+            <div class="debug-line debug-info">Total Scans: <span id="debugTotalScans">0</span></div>
+            <div class="debug-line debug-info">API Status: <span id="debugApiStatus">Unknown</span></div>
+            
+            <div class="debug-controls">
+                <button class="debug-btn" onclick="testPolling()">Test Poll</button>
+                <button class="debug-btn" onclick="clearDebug()">Clear Logs</button>
+                <button class="debug-btn" onclick="testApiConnection()">Test API</button>
+                <button class="debug-btn" onclick="forceScan()">Force Scan</button>
+                <button class="debug-btn" onclick="checkScannerData()">Check Data</button>
+                <button class="debug-btn" onclick="resetPolling()">Reset Polling</button>
             </div>
-            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                <button onclick="testPolling()" style="background: #4CAF50; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Test Poll</button>
-                <button onclick="testScanner()" style="background: #2196F3; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Test Scan</button>
-                <button onclick="clearDebug()" style="background: #f44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Clear</button>
-                <button onclick="checkAPI()" style="background: #ff9800; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">Check API</button>
+            
+            <div id="debugLogs" style="margin-top: 10px; max-height: 150px; overflow-y: auto; border-top: 1px solid #00ff00; padding-top: 5px;">
+                <!-- Logs will appear here -->
             </div>
-            <div id="debugLog" style="margin-top: 5px; max-height: 100px; overflow-y: auto; font-size: 10px; color: #ccc;"></div>
         </div>
     </div>
 
@@ -189,81 +289,139 @@
                     loginEmail.focus();
                 }, 500);
             }
+            
+            // Initialize debug panel
+            initializeDebugPanel();
         });
 
-        // Debug panel functions
+        // Global error handler
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            addDebugLog('❌ Global Error: ' + e.error, 'error');
+        });
+
+        // Debug Panel Functions
+        function initializeDebugPanel() {
+            console.log('🔧 Debug panel initialized');
+            addDebugLog('🔧 Debug panel initialized', 'info');
+        }
+
         function toggleDebug() {
             const content = document.getElementById('debugContent');
             content.style.display = content.style.display === 'none' ? 'block' : 'none';
         }
 
-        function testPolling() {
-            if (window.app && typeof window.app.checkForNewScans === 'function') {
-                addDebugLog("🧪 Manual polling test triggered");
-                window.app.checkForNewScans();
-            } else {
-                addDebugLog("❌ App not ready for polling");
-            }
-        }
-
-        function testScanner() {
-            if (window.testScanner) {
-                addDebugLog("🧪 Test scan triggered");
-                window.testScanner("RAPIDENE-001");
-            } else {
-                addDebugLog("❌ Test scanner not available");
+        function addDebugLog(message, type = 'info') {
+            const logs = document.getElementById('debugLogs');
+            if (!logs) return;
+            
+            const logLine = document.createElement('div');
+            logLine.className = `debug-line debug-${type}`;
+            logLine.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            
+            logs.appendChild(logLine);
+            logs.scrollTop = logs.scrollHeight;
+            
+            // Keep only last 20 logs
+            const allLogs = logs.querySelectorAll('.debug-line');
+            if (allLogs.length > 20) {
+                allLogs[0].remove();
             }
         }
 
         function clearDebug() {
-            addDebugLog("🧹 Debug cleared");
-            const debugLog = document.getElementById('debugLog');
-            if (debugLog) {
-                debugLog.innerHTML = '';
+            const logs = document.getElementById('debugLogs');
+            if (logs) {
+                logs.innerHTML = '';
+            }
+            addDebugLog('🧹 Logs cleared', 'info');
+        }
+
+        // Global test functions
+        function testProduct(productCode) {
+            addDebugLog(`🧪 Testing product: ${productCode}`, 'info');
+            if (window.app && typeof app.handleQRScanManual === 'function') {
+                app.handleQRScanManual(productCode);
+            } else {
+                addDebugLog('❌ App not ready', 'error');
             }
         }
 
-        function checkAPI() {
-            addDebugLog("🔗 Checking API status...");
-            fetch('/api/scanner')
+        function testPolling() {
+            addDebugLog('🔄 Manual polling test', 'info');
+            if (window.app && typeof app.checkForNewScans === 'function') {
+                app.checkForNewScans();
+            } else {
+                addDebugLog('❌ Polling not available', 'error');
+            }
+        }
+
+        function testApiConnection() {
+            addDebugLog('🔗 Testing API connection', 'info');
+            const apiUrl = window.location.origin + '/api/scanner';
+            fetch(apiUrl)
                 .then(response => response.json())
                 .then(data => {
-                    addDebugLog(`✅ API Status: ${data.message}`);
-                    addDebugLog(`📊 Stored scans: ${data.stored_scans}`);
+                    addDebugLog(`✅ API Response: ${data.message}`, 'success');
+                    updateDebugElement('debugApiStatus', 'Connected ✅');
                 })
                 .catch(error => {
-                    addDebugLog(`❌ API Check failed: ${error.message}`);
+                    addDebugLog(`❌ API Error: ${error.message}`, 'error');
+                    updateDebugElement('debugApiStatus', 'Failed ❌');
                 });
         }
 
-        function addDebugLog(message) {
-            const debugLog = document.getElementById('debugLog');
-            if (debugLog) {
-                const timestamp = new Date().toLocaleTimeString();
-                const logEntry = document.createElement('div');
-                logEntry.textContent = `[${timestamp}] ${message}`;
-                debugLog.appendChild(logEntry);
-                debugLog.scrollTop = debugLog.scrollHeight;
+        function forceScan() {
+            addDebugLog('🎯 Forcing test scan', 'info');
+            // Simulate a scan from ESP32
+            const testData = {
+                qr_code: 'TEST-FORCE-' + Date.now(),
+                product_code: 'TEST-FORCE-' + Date.now(),
+                scanner_id: 'DEBUG_SCANNER',
+                timestamp: Date.now()
+            };
+            
+            if (window.handleScannerData) {
+                window.handleScannerData(testData);
+            } else {
+                addDebugLog('❌ Scanner handler not available', 'error');
             }
-            console.log(`🔧 ${message}`);
         }
 
-        // Global error handler
-        window.addEventListener('error', function(e) {
-            console.error('Global error:', e.error);
-            addDebugLog(`❌ Error: ${e.error}`);
-        });
+        function checkScannerData() {
+            addDebugLog('📊 Checking scanner data', 'info');
+            const apiUrl = window.location.origin + '/api/get-scans';
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    addDebugLog(`📊 Scanner Data: ${data.total_scans} total, ${data.new_scans || 0} new`, 'info');
+                    updateDebugElement('debugTotalScans', data.total_scans);
+                })
+                .catch(error => {
+                    addDebugLog(`❌ Data check failed: ${error.message}`, 'error');
+                });
+        }
+
+        function resetPolling() {
+            addDebugLog('🔄 Resetting polling', 'info');
+            if (window.app) {
+                app.stopPolling();
+                setTimeout(() => app.startPolling(), 1000);
+            }
+        }
+
+        function updateDebugElement(elementId, value) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = value;
+            }
+        }
 
         // Make functions globally available
         window.addDebugLog = addDebugLog;
+        window.updateDebugElement = updateDebugElement;
+        window.testProduct = testProduct;
+        window.testPolling = testPolling;
     </script>
-
-    <style>
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-    </style>
 </body>
 </html>
