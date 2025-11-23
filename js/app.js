@@ -4,12 +4,14 @@ class JLinkPOS {
         this.isProcessing = false;
         this.scannerAPIUrl = '';
         this.authStateChecked = false;
+        this.pollingInterval = null;
+        this.isPolling = false;
 
         this.initializeApp();
     }
 
     initializeApp() {
-        console.log("🚀 JLINK POS App Starting on Vercel...");
+        console.log("🚀 JLINK POS App Starting on XAMPP Local Server...");
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -22,12 +24,13 @@ class JLinkPOS {
 
     initAfterDOMReady() {
         console.log("📋 DOM Ready - Initializing app...");
-        
+
         setTimeout(() => {
             this.setupEventListeners();
             this.checkAuthState();
             this.setScannerAPIUrl();
-            
+
+            // Initialize EmailJS
             if (typeof emailjs !== 'undefined') {
                 try {
                     emailjs.init("G4dKsQOK9_vg9Mi2o");
@@ -36,23 +39,102 @@ class JLinkPOS {
                     console.warn("EmailJS init warning:", emailError);
                 }
             }
+
+            // Test XAMPP connection
+            this.testXAMPPConnection();
         }, 500);
     }
 
     setScannerAPIUrl() {
-        // Vercel automatically provides the deployment URL
-        const baseUrl = window.location.origin;
-        this.scannerAPIUrl = `${baseUrl}/api/scanner`;
+        // XAMPP Local Server URL
+        this.scannerAPIUrl = 'http://localhost/jlink-pos-web/api/scanner.php';
         console.log("📡 Scanner API URL:", this.scannerAPIUrl);
+    }
+
+    async testXAMPPConnection() {
+        try {
+            const testUrl = 'http://localhost/jlink-pos-web/api/test.php';
+            const response = await fetch(testUrl);
+            const data = await response.json();
+            console.log("✅ XAMPP Connection Test:", data);
+            this.updateScannerStatus('Connected to XAMPP - Ready for scanning', 'ready');
+        } catch (error) {
+            console.error("❌ XAMPP Connection Failed:", error);
+            this.updateScannerStatus('XAMPP Connection Failed - Check Apache', 'error');
+        }
+    }
+
+    // Start polling for scanner input
+    startPolling() {
+        if (this.pollingInterval) {
+            console.log("⚠️ Polling already active");
+            return;
+        }
+
+        console.log("🔄 Starting scanner polling...");
+        this.isPolling = true;
+
+        // Poll every 1 second for new scans
+        this.pollingInterval = setInterval(() => {
+            this.pollForScans();
+        }, 1000);
+
+        // Do initial poll immediately
+        this.pollForScans();
+    }
+
+    stopPolling() {
+        if (this.pollingInterval) {
+            console.log("⏹️ Stopping scanner polling...");
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+            this.isPolling = false;
+        }
+    }
+
+    async pollForScans() {
+        if (!this.currentUser || this.isProcessing) {
+            return;
+        }
+
+        try {
+            const response = await fetch(this.scannerAPIUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success && data.scans && data.scans.length > 0) {
+                console.log(`📥 Received ${data.scans.length} new scan(s):`, data.scans);
+
+                // Process each scan
+                for (const scan of data.scans) {
+                    await this.processScannerInput(scan);
+                    // Small delay between processing multiple scans
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Polling error:', error);
+            // Don't show error on UI for polling failures - just log them
+        }
     }
 
     setupEventListeners() {
         console.log("🔧 Setting up event listeners...");
-        
+
         // Login events
         const loginBtn = document.getElementById('loginBtn');
         const loginPassword = document.getElementById('loginPassword');
-        
+
         if (loginBtn) loginBtn.addEventListener('click', () => this.handleLogin());
         if (loginPassword) loginPassword.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.handleLogin();
@@ -95,28 +177,7 @@ class JLinkPOS {
             cartManager.onCartUpdate((items, totals) => this.updateCartDisplay(items, totals));
         }
 
-        this.setupScannerAPI();
         console.log("✅ Event listeners setup complete");
-    }
-
-    setupScannerAPI() {
-        // Global function for ESP32 to call
-        window.handleScannerInput = async (scannerData) => {
-            console.log("📱 Scanner input received:", scannerData);
-            await this.processScannerInput(scannerData);
-        };
-
-        // Test function
-        window.testScannerAPI = async () => {
-            const testData = {
-                qr_code: "RAPIDENE-001",
-                scanner_id: "ESP32_TEST",
-                timestamp: Date.now()
-            };
-            await this.processScannerInput(testData);
-        };
-
-        console.log("✅ Scanner API ready - ESP32 can call handleScannerInput()");
     }
 
     async processScannerInput(scannerData) {
@@ -125,35 +186,44 @@ class JLinkPOS {
             return;
         }
 
-        this.setProcessingState(true);
-        this.updateScannerStatus('Processing scanner input...', 'processing');
+        this.isProcessing = true;
+        this.updateScannerStatus('Processing scan', 'processing');
 
         try {
             console.log("🔍 Processing scanner data:", scannerData);
-            
-            let productCode = scannerData.qr_code || scannerData.product_code;
-            
+
+            let productCode = scannerData.product_code || scannerData.qr_code;
+
             if (!productCode) {
                 throw new Error('No product code in scanner data');
             }
 
             console.log("🔍 Looking up product:", productCode);
-            
+
             if (typeof productService !== 'undefined') {
                 const product = await productService.findProductByCode(productCode);
                 console.log("✅ Product found:", product);
 
                 if (product.quantity <= 0) {
-                    this.updateScannerStatus(`Scanner: ${product.name} - Out of stock`, 'error');
+                    this.updateScannerStatus(`${product.name} - Out of stock!`, 'error');
+                    this.playErrorSound();
+                    setTimeout(() => {
+                        this.updateScannerStatus('Ready to scan - Listening', 'ready');
+                    }, 3000);
                     return;
                 }
 
                 // Add to cart
                 cartManager.addItem(product, 1);
-                this.updateScannerStatus(`Scanner: ${product.name} added to cart`, 'ready');
-                
+                this.updateScannerStatus(`✅ ${product.name} added to cart!`, 'ready');
+
                 // Play success sound
                 this.playSuccessSound();
+
+                // Reset status after 2 seconds
+                setTimeout(() => {
+                    this.updateScannerStatus('Ready to scan - Listening', 'ready');
+                }, 2000);
 
             } else {
                 throw new Error('Product service not available');
@@ -161,9 +231,14 @@ class JLinkPOS {
 
         } catch (error) {
             console.error('❌ Scanner processing error:', error);
-            this.updateScannerStatus(`Scanner error: ${error.message}`, 'error');
+            this.updateScannerStatus(`Error: ${error.message}`, 'error');
+            this.playErrorSound();
+
+            setTimeout(() => {
+                this.updateScannerStatus('Ready to scan - Listening', 'ready');
+            }, 3000);
         } finally {
-            this.setProcessingState(false);
+            this.isProcessing = false;
         }
     }
 
@@ -172,16 +247,16 @@ class JLinkPOS {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
-            
+
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-            
+
             oscillator.frequency.value = 800;
             oscillator.type = 'sine';
-            
+
             gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-            
+
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + 0.2);
         } catch (e) {
@@ -189,11 +264,33 @@ class JLinkPOS {
         }
     }
 
+    playErrorSound() {
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.value = 400;
+            oscillator.type = 'square';
+
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        } catch (e) {
+            console.log("Audio not supported");
+        }
+    }
+
     checkAuthState() {
         console.log("🔐 Checking authentication state...");
-        
+
         if (!window.auth) {
-            console.error("❌ Firebase auth not available");
+            console.error("❌  Auth not available");
             this.showScreen('loginScreen');
             return;
         }
@@ -201,7 +298,7 @@ class JLinkPOS {
         window.auth.onAuthStateChanged((user) => {
             console.log("🔄 Auth state changed:", user ? user.email : "No user");
             this.authStateChecked = true;
-            
+
             if (user) {
                 this.handleAuthSuccess(user);
             } else {
@@ -232,27 +329,26 @@ class JLinkPOS {
         const password = document.getElementById('loginPassword').value;
 
         if (!email || !password) {
-            this.updateScannerStatus('Please enter email and password', 'error');
+            alert('Please enter email and password');
             return;
         }
 
         this.setLoadingState(true);
-        this.updateScannerStatus('Logging in...', 'processing');
 
         try {
             console.log("🔐 Attempting login for:", email);
-            
+
             if (!window.auth) {
                 throw new Error('Authentication service not available');
             }
 
             const userCredential = await window.auth.signInWithEmailAndPassword(email, password);
             console.log('✅ Login successful:', userCredential.user.email);
-            
+
         } catch (error) {
             this.setLoadingState(false);
             console.error('❌ Login error:', error);
-            
+
             let errorMessage = 'Login failed';
             if (error.code === 'auth/user-not-found') {
                 errorMessage = 'No account found with this email';
@@ -263,26 +359,26 @@ class JLinkPOS {
             } else {
                 errorMessage = error.message;
             }
-            
-            this.updateScannerStatus(`Login failed: ${errorMessage}`, 'error');
+
             alert(`Login failed: ${errorMessage}`);
         }
     }
 
     async handleLogout() {
         try {
+            this.stopPolling(); // Stop polling when logging out
             await window.auth.signOut();
             this.updateScannerStatus('Logged out successfully', 'ready');
         } catch (error) {
             console.error('Logout error:', error);
-            this.updateScannerStatus('Logout failed', 'error');
+            alert('Logout failed');
         }
     }
 
     handleAuthSuccess(user) {
         console.log("✅ Authentication successful:", user.email);
         this.currentUser = user;
-        
+
         // Set user for services
         if (typeof productService !== 'undefined') {
             productService.setUser(user);
@@ -299,7 +395,10 @@ class JLinkPOS {
 
         this.showScreen('posScreen');
         this.setLoadingState(false);
-        this.updateScannerStatus('Ready to scan QR codes', 'ready');
+
+        // Start polling for ESP32 scans
+        this.startPolling();
+        this.updateScannerStatus('🔴 LIVE - Listening', 'ready');
 
         // Focus on QR input
         setTimeout(() => {
@@ -313,9 +412,9 @@ class JLinkPOS {
     handleAuthFailure() {
         console.log("❌ No user authenticated");
         this.currentUser = null;
+        this.stopPolling(); // Stop polling when not authenticated
         this.showScreen('loginScreen');
         this.setLoadingState(false);
-        this.updateScannerStatus('Please login to continue', 'ready');
     }
 
     async handleQRScan() {
@@ -327,9 +426,6 @@ class JLinkPOS {
             return;
         }
 
-        if (this.isProcessing) return;
-
-        this.setProcessingState(true);
         this.updateScannerStatus('Searching for product...', 'processing');
 
         try {
@@ -350,13 +446,17 @@ class JLinkPOS {
             this.playSuccessSound();
 
             qrInput.value = '';
-            setTimeout(() => qrInput.focus(), 100);
+            setTimeout(() => {
+                qrInput.focus();
+                this.updateScannerStatus('🔴 LIVE - Listening', 'ready');
+            }, 2000);
 
         } catch (error) {
             this.updateScannerStatus(`Error: ${error.message}`, 'error');
             console.error('QR scan error:', error);
-        } finally {
-            this.setProcessingState(false);
+            setTimeout(() => {
+                this.updateScannerStatus('🔴 LIVE - Listening', 'ready');
+            }, 3000);
         }
     }
 
@@ -384,8 +484,6 @@ class JLinkPOS {
             return;
         }
 
-        this.setProcessingState(true);
-
         try {
             if (typeof productService === 'undefined') {
                 throw new Error('Product service not available');
@@ -406,8 +504,6 @@ class JLinkPOS {
         } catch (error) {
             alert(`Error: ${error.message}`);
             console.error('Manual add error:', error);
-        } finally {
-            this.setProcessingState(false);
         }
     }
 
@@ -506,11 +602,10 @@ class JLinkPOS {
         const totals = cartManager.getTotals();
         const customerName = document.getElementById('customerName').value.trim();
 
-        if (!confirm(`Complete sale for LKR ${totals.total.toFixed(2)} to ${customerEmail}?\n\nThis will:\n• Send email receipt to customer\n• Update inventory quantities\n• Record sale in mobile app`)) {
+        if (!confirm(`Complete sale for LKR ${totals.total.toFixed(2)} to ${customerEmail}?`)) {
             return;
         }
 
-        this.setProcessingState(true);
         this.updateScannerStatus('Processing sale...', 'processing');
 
         try {
@@ -523,48 +618,42 @@ class JLinkPOS {
                 timestamp: new Date().toISOString()
             };
 
-            let saleId = 'DEMO-' + Date.now();
-            
+            let saleId = 'SALE-' + Date.now();
+
             if (typeof salesService !== 'undefined') {
                 saleId = await salesService.processSale(saleData);
-                console.log("✅ Sale recorded in database:", saleId);
+                console.log("✅ Sale recorded:", saleId);
             }
-            
+
             saleData.saleId = saleId;
 
             // Send email receipt
-            this.updateScannerStatus('Sending email receipt...', 'processing');
+            this.updateScannerStatus('Sending receipt...', 'processing');
             let emailSent = false;
-            
+
             if (typeof emailService !== 'undefined') {
                 emailSent = await emailService.sendReceiptEmail(customerEmail, saleData);
-                console.log("✅ Email sent:", emailSent);
             }
 
-            let successMessage = `Sale #${saleId} completed successfully!\nTotal: LKR ${totals.total.toFixed(2)}`;
+            let successMessage = `Sale #${saleId} completed!\nTotal: LKR ${totals.total.toFixed(2)}`;
             if (emailSent) {
                 successMessage += `\nReceipt sent to ${customerEmail}`;
-            } else {
-                successMessage += `\n(Email receipt failed to send)`;
             }
 
             this.showSuccessAnimation(successMessage);
-            console.log("🎉 Checkout completed successfully");
 
             // Reset for next customer
             setTimeout(() => {
                 cartManager.clearCart();
                 document.getElementById('customerEmail').value = '';
                 document.getElementById('customerName').value = '';
-                this.updateScannerStatus('Ready for next customer!', 'ready');
+                this.updateScannerStatus('🔴 LIVE - Ready for next customer', 'ready');
             }, 3000);
 
         } catch (error) {
             console.error('Checkout error:', error);
             this.updateScannerStatus(`Checkout failed: ${error.message}`, 'error');
             alert(`Checkout failed: ${error.message}`);
-        } finally {
-            this.setProcessingState(false);
         }
     }
 
@@ -608,7 +697,6 @@ class JLinkPOS {
             <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
             <div style="font-weight: bold; margin-bottom: 1rem;">Sale Completed!</div>
             <div style="font-size: 1.2rem; max-width: 400px; line-height: 1.5; white-space: pre-line;">${message}</div>
-            <div style="margin-top: 2rem; font-size: 1rem; opacity: 0.8;">Automatically continuing...</div>
         `;
 
         document.body.appendChild(overlay);
@@ -624,12 +712,10 @@ class JLinkPOS {
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.remove('active');
         });
-        
+
         const targetScreen = document.getElementById(screenId);
         if (targetScreen) {
             targetScreen.classList.add('active');
-        } else {
-            console.error('Screen not found:', screenId);
         }
     }
 
@@ -654,26 +740,6 @@ class JLinkPOS {
         }
     }
 
-    setProcessingState(processing) {
-        this.isProcessing = processing;
-        const qrInput = document.getElementById('qrInput');
-        const manualBtn = document.getElementById('manualAddBtn');
-
-        if (qrInput) {
-            if (processing) {
-                qrInput.disabled = true;
-                qrInput.placeholder = 'Processing...';
-            } else {
-                qrInput.disabled = false;
-                qrInput.placeholder = 'Scan QR Code or Enter Product Code';
-            }
-        }
-
-        if (manualBtn) {
-            manualBtn.disabled = processing;
-        }
-    }
-
     validateEmail(email) {
         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return re.test(email);
@@ -690,7 +756,7 @@ class JLinkPOS {
     }
 }
 
-// Initialize the app when everything is ready
+// Initialize the app
 let app;
 
 function initializeApp() {
@@ -699,18 +765,8 @@ function initializeApp() {
     }
 }
 
-// Start the app
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeApp);
 } else {
     initializeApp();
-}
-
-// Global function for ESP32 to call directly
-function handleScannerData(scannerData) {
-    if (app && typeof app.processScannerInput === 'function') {
-        app.processScannerInput(scannerData);
-    } else {
-        console.error('App not ready to handle scanner data');
-    }
 }
