@@ -1,13 +1,10 @@
 // Custom JLINK Dialog System
-// Add this to the TOP of your app.js file (before the JLinkPOS class)
-
 class JLinkDialog {
     constructor() {
         this.createDialogContainer();
     }
 
     createDialogContainer() {
-        // Create dialog overlay
         const overlay = document.createElement('div');
         overlay.id = 'jlink-dialog-overlay';
         overlay.style.cssText = `
@@ -25,7 +22,6 @@ class JLinkDialog {
         `;
         document.body.appendChild(overlay);
 
-        // Create dialog box
         const dialogBox = document.createElement('div');
         dialogBox.id = 'jlink-dialog-box';
         dialogBox.style.cssText = `
@@ -39,7 +35,6 @@ class JLinkDialog {
         `;
         overlay.appendChild(dialogBox);
 
-        // Add animation
         const style = document.createElement('style');
         style.textContent = `
             @keyframes dialogSlideIn {
@@ -61,7 +56,6 @@ class JLinkDialog {
             const overlay = document.getElementById('jlink-dialog-overlay');
             const dialogBox = document.getElementById('jlink-dialog-box');
 
-            // Determine icon and colors based on type
             let icon = '💬';
             let headerColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
@@ -79,7 +73,6 @@ class JLinkDialog {
                 headerColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
             }
 
-            // Build dialog HTML
             let dialogHTML = `
                 <div style="background: ${headerColor}; padding: 1.5rem; text-align: center;">
                     <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">${icon}</div>
@@ -93,7 +86,6 @@ class JLinkDialog {
                     </p>
             `;
 
-            // Add input field for prompt
             if (type === 'prompt') {
                 const inputTypeAttr = inputType === 'email' ? 'email' : 'text';
                 const placeholder = inputType === 'email' ? 'Enter email address' : 'Enter value';
@@ -115,7 +107,6 @@ class JLinkDialog {
                 `;
             }
 
-            // Add buttons
             dialogHTML += `<div style="display: flex; gap: 0.8rem; justify-content: center;">`;
 
             if (type === 'confirm') {
@@ -198,7 +189,6 @@ class JLinkDialog {
             dialogBox.innerHTML = dialogHTML;
             overlay.style.display = 'flex';
 
-            // Add hover effects to buttons
             const okBtn = document.getElementById('jlink-dialog-ok');
             const cancelBtn = document.getElementById('jlink-dialog-cancel');
 
@@ -220,7 +210,6 @@ class JLinkDialog {
                 });
             }
 
-            // Handle button clicks
             okBtn.onclick = () => {
                 if (type === 'prompt') {
                     const input = document.getElementById('jlink-dialog-input');
@@ -243,7 +232,6 @@ class JLinkDialog {
                 };
             }
 
-            // Handle Enter key for prompt
             if (type === 'prompt') {
                 const input = document.getElementById('jlink-dialog-input');
                 input.focus();
@@ -254,7 +242,6 @@ class JLinkDialog {
                 });
             }
 
-            // Close on overlay click
             overlay.onclick = (e) => {
                 if (e.target === overlay) {
                     overlay.style.display = 'none';
@@ -285,10 +272,8 @@ class JLinkDialog {
     }
 }
 
-// Create global instance
 const jlinkDialog = new JLinkDialog();
 
-// Override global alert, confirm, prompt for convenience
 window.jlinkAlert = (msg) => jlinkDialog.alert(msg);
 window.jlinkConfirm = (msg) => jlinkDialog.confirm(msg);
 window.jlinkPrompt = (msg, type) => jlinkDialog.prompt(msg, 'JLINK SAYS', type);
@@ -306,7 +291,7 @@ class JLinkPOS {
     }
 
     initializeApp() {
-        console.log("🚀 JLINK POS App Starting on XAMPP Local Server...");
+        console.log("🚀 JLINK POS App Starting on Vercel...");
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -325,7 +310,6 @@ class JLinkPOS {
             this.checkAuthState();
             this.setScannerAPIUrl();
 
-            // Initialize EmailJS
             if (typeof emailjs !== 'undefined') {
                 try {
                     emailjs.init("G4dKsQOK9_vg9Mi2o");
@@ -335,31 +319,38 @@ class JLinkPOS {
                 }
             }
 
-            // Test XAMPP connection
-            this.testXAMPPConnection();
+            this.testVercelConnection();
         }, 500);
     }
 
     setScannerAPIUrl() {
-        // XAMPP Local Server URL
-        this.scannerAPIUrl = 'http://localhost/jlink-pos-web/api/scanner.php';
+        // IMPORTANT: Update this URL after deploying to Vercel
+        // Format: https://your-project-name.vercel.app/api/scanner
+        
+        // For development with Vercel CLI (vercel dev)
+        if (window.location.hostname === 'localhost') {
+            this.scannerAPIUrl = 'http://localhost:3000/api/scanner';
+        } else {
+            // Production Vercel URL - UPDATE THIS AFTER DEPLOYMENT
+            this.scannerAPIUrl = `${window.location.origin}/api/scanner`;
+        }
+        
         console.log("📡 Scanner API URL:", this.scannerAPIUrl);
     }
 
-    async testXAMPPConnection() {
+    async testVercelConnection() {
         try {
-            const testUrl = 'http://localhost/jlink-pos-web/api/test.php';
+            const testUrl = this.scannerAPIUrl.replace('/scanner', '/test');
             const response = await fetch(testUrl);
             const data = await response.json();
-            console.log("✅ XAMPP Connection Test:", data);
-            this.updateScannerStatus('Connected to XAMPP - Ready for scanning', 'ready');
+            console.log("✅ Vercel Connection Test:", data);
+            this.updateScannerStatus('Connected to Vercel - Ready for scanning', 'ready');
         } catch (error) {
-            console.error("❌ XAMPP Connection Failed:", error);
-            this.updateScannerStatus('XAMPP Connection Failed - Check Apache', 'error');
+            console.error("❌ Vercel Connection Failed:", error);
+            this.updateScannerStatus('Vercel Connection Failed - Check deployment', 'error');
         }
     }
 
-    // Start polling for scanner input
     startPolling() {
         if (this.pollingInterval) {
             console.log("⚠️ Polling already active");
@@ -369,12 +360,10 @@ class JLinkPOS {
         console.log("🔄 Starting scanner polling...");
         this.isPolling = true;
 
-        // Poll every 1 second for new scans
         this.pollingInterval = setInterval(() => {
             this.pollForScans();
         }, 1000);
 
-        // Do initial poll immediately
         this.pollForScans();
     }
 
@@ -409,24 +398,20 @@ class JLinkPOS {
             if (data.success && data.scans && data.scans.length > 0) {
                 console.log(`📥 Received ${data.scans.length} new scan(s):`, data.scans);
 
-                // Process each scan
                 for (const scan of data.scans) {
                     await this.processScannerInput(scan);
-                    // Small delay between processing multiple scans
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
 
         } catch (error) {
             console.error('❌ Polling error:', error);
-            // Don't show error on UI for polling failures - just log them
         }
     }
 
     setupEventListeners() {
         console.log("🔧 Setting up event listeners...");
 
-        // Login events
         const loginBtn = document.getElementById('loginBtn');
         const loginPassword = document.getElementById('loginPassword');
 
@@ -435,11 +420,9 @@ class JLinkPOS {
             if (e.key === 'Enter') this.handleLogin();
         });
 
-        // Logout event
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) logoutBtn.addEventListener('click', () => this.handleLogout());
 
-        // QR Scanner events
         const qrInput = document.getElementById('qrInput');
         if (qrInput) {
             qrInput.addEventListener('keypress', (e) => {
@@ -447,7 +430,6 @@ class JLinkPOS {
             });
         }
 
-        // Manual add events
         const manualAddBtn = document.getElementById('manualAddBtn');
         if (manualAddBtn) manualAddBtn.addEventListener('click', () => this.showManualAddModal());
 
@@ -457,7 +439,6 @@ class JLinkPOS {
         const cancelManualAdd = document.getElementById('cancelManualAdd');
         if (cancelManualAdd) cancelManualAdd.addEventListener('click', () => this.hideManualAddModal());
 
-        // Cart actions
         const checkoutBtn = document.getElementById('checkoutBtn');
         if (checkoutBtn) checkoutBtn.addEventListener('click', () => this.handleCheckout());
 
@@ -467,7 +448,6 @@ class JLinkPOS {
         const cancelLastBtn = document.getElementById('cancelLastBtn');
         if (cancelLastBtn) cancelLastBtn.addEventListener('click', () => this.handleCancelLastItem());
 
-        // Cart updates
         if (typeof cartManager !== 'undefined') {
             cartManager.onCartUpdate((items, totals) => this.updateCartDisplay(items, totals));
         }
@@ -508,14 +488,11 @@ class JLinkPOS {
                     return;
                 }
 
-                // Add to cart
                 cartManager.addItem(product, 1);
                 this.updateScannerStatus(`✅ ${product.name} added to cart!`, 'ready');
 
-                // Play success sound
                 this.playSuccessSound();
 
-                // Reset status after 2 seconds
                 setTimeout(() => {
                     this.updateScannerStatus('Ready to scan - Listening', 'ready');
                 }, 2000);
@@ -585,7 +562,7 @@ class JLinkPOS {
         console.log("🔐 Checking authentication state...");
 
         if (!window.auth) {
-            console.error("❌  Auth not available");
+            console.error("❌ Auth not available");
             this.showScreen('loginScreen');
             return;
         }
@@ -661,7 +638,7 @@ class JLinkPOS {
 
     async handleLogout() {
         try {
-            this.stopPolling(); // Stop polling when logging out
+            this.stopPolling();
             await window.auth.signOut();
             this.updateScannerStatus('Logged out successfully', 'ready');
         } catch (error) {
@@ -674,7 +651,6 @@ class JLinkPOS {
         console.log("✅ Authentication successful:", user.email);
         this.currentUser = user;
 
-        // Set user for services
         if (typeof productService !== 'undefined') {
             productService.setUser(user);
         }
@@ -682,7 +658,6 @@ class JLinkPOS {
             salesService.setUser(user);
         }
 
-        // Update UI
         const currentUserElement = document.getElementById('currentUser');
         if (currentUserElement) {
             currentUserElement.textContent = user.email;
@@ -691,11 +666,9 @@ class JLinkPOS {
         this.showScreen('posScreen');
         this.setLoadingState(false);
 
-        // Start polling for ESP32 scans
         this.startPolling();
         this.updateScannerStatus('🔴 LIVE - Listening', 'ready');
 
-        // Focus on QR input
         setTimeout(() => {
             const qrInput = document.getElementById('qrInput');
             if (qrInput) {
@@ -707,7 +680,7 @@ class JLinkPOS {
     handleAuthFailure() {
         console.log("❌ No user authenticated");
         this.currentUser = null;
-        this.stopPolling(); // Stop polling when not authenticated
+        this.stopPolling();
         this.showScreen('loginScreen');
         this.setLoadingState(false);
     }
@@ -1065,3 +1038,4 @@ if (document.readyState === 'loading') {
 } else {
     initializeApp();
 }
+
