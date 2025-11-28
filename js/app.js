@@ -1,3 +1,298 @@
+// Custom JLINK Dialog System
+// Add this to the TOP of your app.js file (before the JLinkPOS class)
+
+class JLinkDialog {
+    constructor() {
+        this.createDialogContainer();
+    }
+
+    createDialogContainer() {
+        // Create dialog overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'jlink-dialog-overlay';
+        overlay.style.cssText = `
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        `;
+        document.body.appendChild(overlay);
+
+        // Create dialog box
+        const dialogBox = document.createElement('div');
+        dialogBox.id = 'jlink-dialog-box';
+        dialogBox.style.cssText = `
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 450px;
+            width: 90%;
+            overflow: hidden;
+            animation: dialogSlideIn 0.3s ease;
+        `;
+        overlay.appendChild(dialogBox);
+
+        // Add animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes dialogSlideIn {
+                from {
+                    transform: translateY(-50px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    show(title, message, type = 'alert', inputType = null) {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('jlink-dialog-overlay');
+            const dialogBox = document.getElementById('jlink-dialog-box');
+
+            // Determine icon and colors based on type
+            let icon = '💬';
+            let headerColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+
+            if (type === 'confirm') {
+                icon = '❓';
+                headerColor = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+            } else if (type === 'success') {
+                icon = '✅';
+                headerColor = 'linear-gradient(90deg, #11998e 0%, #38ef7d 100%)';
+            } else if (type === 'error') {
+                icon = '❌';
+                headerColor = 'linear-gradient(90deg, #eb3349 0%, #f45c43 100%)';
+            } else if (type === 'prompt') {
+                icon = '✏️';
+                headerColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            }
+
+            // Build dialog HTML
+            let dialogHTML = `
+                <div style="background: ${headerColor}; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">${icon}</div>
+                    <h3 style="color: white; margin: 0; font-size: 1.3rem; font-weight: 700;">
+                        ${title}
+                    </h3>
+                </div>
+                <div style="padding: 2rem;">
+                    <p style="color: #343a40; font-size: 1.05rem; line-height: 1.6; margin: 0 0 1.5rem 0; text-align: center;">
+                        ${message}
+                    </p>
+            `;
+
+            // Add input field for prompt
+            if (type === 'prompt') {
+                const inputTypeAttr = inputType === 'email' ? 'email' : 'text';
+                const placeholder = inputType === 'email' ? 'Enter email address' : 'Enter value';
+                dialogHTML += `
+                    <input 
+                        type="${inputTypeAttr}" 
+                        id="jlink-dialog-input" 
+                        placeholder="${placeholder}"
+                        style="
+                            width: 100%;
+                            padding: 0.9rem;
+                            border: 2px solid #e0e0e0;
+                            border-radius: 10px;
+                            font-size: 1rem;
+                            margin-bottom: 1.5rem;
+                            box-sizing: border-box;
+                        "
+                    />
+                `;
+            }
+
+            // Add buttons
+            dialogHTML += `<div style="display: flex; gap: 0.8rem; justify-content: center;">`;
+
+            if (type === 'confirm') {
+                dialogHTML += `
+                    <button id="jlink-dialog-cancel" style="
+                        flex: 1;
+                        padding: 0.9rem 1.5rem;
+                        background: #6c757d;
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    ">Cancel</button>
+                    <button id="jlink-dialog-ok" style="
+                        flex: 1;
+                        padding: 0.9rem 1.5rem;
+                        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+                    ">Confirm</button>
+                `;
+            } else if (type === 'prompt') {
+                dialogHTML += `
+                    <button id="jlink-dialog-cancel" style="
+                        flex: 1;
+                        padding: 0.9rem 1.5rem;
+                        background: #6c757d;
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    ">Cancel</button>
+                    <button id="jlink-dialog-ok" style="
+                        flex: 1;
+                        padding: 0.9rem 1.5rem;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                    ">OK</button>
+                `;
+            } else {
+                dialogHTML += `
+                    <button id="jlink-dialog-ok" style="
+                        flex: 1;
+                        max-width: 200px;
+                        padding: 0.9rem 1.5rem;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                    ">OK</button>
+                `;
+            }
+
+            dialogHTML += `</div></div>`;
+
+            dialogBox.innerHTML = dialogHTML;
+            overlay.style.display = 'flex';
+
+            // Add hover effects to buttons
+            const okBtn = document.getElementById('jlink-dialog-ok');
+            const cancelBtn = document.getElementById('jlink-dialog-cancel');
+
+            okBtn.addEventListener('mouseenter', () => {
+                okBtn.style.transform = 'translateY(-2px)';
+            });
+            okBtn.addEventListener('mouseleave', () => {
+                okBtn.style.transform = 'translateY(0)';
+            });
+
+            if (cancelBtn) {
+                cancelBtn.addEventListener('mouseenter', () => {
+                    cancelBtn.style.transform = 'translateY(-2px)';
+                    cancelBtn.style.background = '#5a6268';
+                });
+                cancelBtn.addEventListener('mouseleave', () => {
+                    cancelBtn.style.transform = 'translateY(0)';
+                    cancelBtn.style.background = '#6c757d';
+                });
+            }
+
+            // Handle button clicks
+            okBtn.onclick = () => {
+                if (type === 'prompt') {
+                    const input = document.getElementById('jlink-dialog-input');
+                    const value = input.value.trim();
+                    overlay.style.display = 'none';
+                    resolve(value || null);
+                } else if (type === 'confirm') {
+                    overlay.style.display = 'none';
+                    resolve(true);
+                } else {
+                    overlay.style.display = 'none';
+                    resolve(true);
+                }
+            };
+
+            if (cancelBtn) {
+                cancelBtn.onclick = () => {
+                    overlay.style.display = 'none';
+                    resolve(false);
+                };
+            }
+
+            // Handle Enter key for prompt
+            if (type === 'prompt') {
+                const input = document.getElementById('jlink-dialog-input');
+                input.focus();
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        okBtn.click();
+                    }
+                });
+            }
+
+            // Close on overlay click
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    overlay.style.display = 'none';
+                    resolve(false);
+                }
+            };
+        });
+    }
+
+    alert(message, title = 'JLINK SAYS') {
+        return this.show(title, message, 'alert');
+    }
+
+    confirm(message, title = 'JLINK SAYS') {
+        return this.show(title, message, 'confirm');
+    }
+
+    prompt(message, title = 'JLINK SAYS', inputType = 'text') {
+        return this.show(title, message, 'prompt', inputType);
+    }
+
+    success(message, title = 'JLINK SAYS') {
+        return this.show(title, message, 'success');
+    }
+
+    error(message, title = 'JLINK SAYS') {
+        return this.show(title, message, 'error');
+    }
+}
+
+// Create global instance
+const jlinkDialog = new JLinkDialog();
+
+// Override global alert, confirm, prompt for convenience
+window.jlinkAlert = (msg) => jlinkDialog.alert(msg);
+window.jlinkConfirm = (msg) => jlinkDialog.confirm(msg);
+window.jlinkPrompt = (msg, type) => jlinkDialog.prompt(msg, 'JLINK SAYS', type);
+
 class JLinkPOS {
     constructor() {
         this.currentUser = null;
@@ -329,7 +624,7 @@ class JLinkPOS {
         const password = document.getElementById('loginPassword').value;
 
         if (!email || !password) {
-            alert('Please enter email and password');
+            await jlinkDialog.alert('Please enter email and password');
             return;
         }
 
@@ -360,7 +655,7 @@ class JLinkPOS {
                 errorMessage = error.message;
             }
 
-            alert(`Login failed: ${errorMessage}`);
+            await jlinkDialog.error(`Login failed: ${errorMessage}`);
         }
     }
 
@@ -371,7 +666,7 @@ class JLinkPOS {
             this.updateScannerStatus('Logged out successfully', 'ready');
         } catch (error) {
             console.error('Logout error:', error);
-            alert('Logout failed');
+            await jlinkDialog.error('Logout failed');
         }
     }
 
@@ -422,7 +717,7 @@ class JLinkPOS {
         const productCode = qrInput.value.trim();
 
         if (!productCode) {
-            this.updateScannerStatus('Please enter a product code', 'error');
+            await jlinkDialog.alert('Please enter a product code');
             return;
         }
 
@@ -480,7 +775,7 @@ class JLinkPOS {
         const quantity = parseInt(document.getElementById('manualQuantity').value) || 1;
 
         if (!productCode) {
-            alert('Please enter a product code');
+            await jlinkDialog.alert('Please enter a product code');
             return;
         }
 
@@ -492,7 +787,7 @@ class JLinkPOS {
             const product = await productService.findProductByCode(productCode);
 
             if (product.quantity <= 0) {
-                alert(`Product out of stock: ${product.name}`);
+                await jlinkDialog.error(`Product out of stock: ${product.name}`);
                 return;
             }
 
@@ -502,7 +797,7 @@ class JLinkPOS {
             this.hideManualAddModal();
 
         } catch (error) {
-            alert(`Error: ${error.message}`);
+            await jlinkDialog.error(`Error: ${error.message}`);
             console.error('Manual add error:', error);
         }
     }
@@ -582,19 +877,19 @@ class JLinkPOS {
 
     async handleCheckout() {
         if (cartManager.isEmpty()) {
-            alert('Cart is empty!');
+            await jlinkDialog.alert('Cart is empty!');
             return;
         }
 
         const customerEmail = document.getElementById('customerEmail').value.trim();
         if (!customerEmail) {
-            alert('Please enter customer email');
+            await jlinkDialog.alert('Please enter customer email');
             document.getElementById('customerEmail').focus();
             return;
         }
 
         if (!this.validateEmail(customerEmail)) {
-            alert('Please enter a valid email address');
+            await jlinkDialog.error('Please enter a valid email address');
             document.getElementById('customerEmail').focus();
             return;
         }
@@ -602,7 +897,7 @@ class JLinkPOS {
         const totals = cartManager.getTotals();
         const customerName = document.getElementById('customerName').value.trim();
 
-        if (!confirm(`Complete sale for LKR ${totals.total.toFixed(2)} to ${customerEmail}?`)) {
+        if (!await jlinkDialog.confirm(`Complete sale for LKR ${totals.total.toFixed(2)} to ${customerEmail}?`)) {
             return;
         }
 
@@ -653,16 +948,16 @@ class JLinkPOS {
         } catch (error) {
             console.error('Checkout error:', error);
             this.updateScannerStatus(`Checkout failed: ${error.message}`, 'error');
-            alert(`Checkout failed: ${error.message}`);
+            await jlinkDialog.error(`Checkout failed: ${error.message}`);
         }
     }
 
-    handleClearCart() {
+    async handleClearCart() {
         if (cartManager.isEmpty()) {
             return;
         }
 
-        if (confirm('Clear all items from cart?')) {
+        if (await jlinkDialog.confirm('Clear all items from cart?')) {
             cartManager.clearCart();
             this.updateScannerStatus('Cart cleared', 'ready');
         }
