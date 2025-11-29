@@ -126,22 +126,26 @@ body {
 }
 
 #logoutBtn {
-    background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-    color: white;
-    border: none;
+    background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%) !important;
+    color: white !important;
+    border: none !important;
     padding: 0.6rem 1.5rem;
     border-radius: 25px;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(235, 51, 73, 0.3);
+    box-shadow: 0 4px 15px rgba(235, 51, 73, 0.3) !important;
+
+    /* force remove filters that cause purple */
+    filter: none !important;
 }
 
 #logoutBtn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(235, 51, 73, 0.4);
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(235, 51, 73, 0.4) !important;
 }
+
 
 /* ===== LOGIN SCREEN ===== */
 #loginScreen {
@@ -876,3 +880,4 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
 }
+
