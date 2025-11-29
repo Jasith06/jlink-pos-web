@@ -344,9 +344,9 @@ class JLinkPOS {
             const response = await fetch(testUrl);
             const data = await response.json();
             console.log("✅ Vercel Connection Test:", data);
-            this.updateScannerStatus('Connected to Vercel - Ready for scanning', 'ready');
+            this.updateScannerStatus('Connected to JLINK - Ready for scanning', 'ready');
         } catch (error) {
-            console.error("❌ Vercel Connection Failed:", error);
+            console.error("❌ JLINK Connection Failed:", error);
             this.updateScannerStatus('Vercel Connection Failed - Check deployment', 'error');
         }
     }
@@ -1038,4 +1038,5 @@ if (document.readyState === 'loading') {
 } else {
     initializeApp();
 }
+
 
