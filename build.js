@@ -48,6 +48,19 @@ try {
   console.error('❌ Error copying index.html:', err.message);
 }
 
+// Copy favicon.ico
+try {
+  const faviconSource = path.join(__dirname, 'favicon.ico');
+  if (fs.existsSync(faviconSource)) {
+    fs.copyFileSync(faviconSource, path.join(publicDir, 'favicon.ico'));
+    console.log('✅ Copied favicon.ico');
+  } else {
+    console.warn('⚠️ favicon.ico not found in root directory');
+  }
+} catch (err) {
+  console.error('❌ Error copying favicon:', err.message);
+}
+
 // Copy JS folder
 try {
   const jsDir = path.join(publicDir, 'js');
