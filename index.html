@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JLINK - POS System</title>
     
-    <!-- INLINE CSS - THIS WILL DEFINITELY WORK -->
+    <!-- INLINE CSS WITH CDN IMAGES -->
     <style>
         * {
             margin: 0;
@@ -44,6 +44,16 @@
             gap: 1rem;
         }
         
+        .logo-img {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            object-fit: cover;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: white;
+        }
+        
         .logo h1 {
             color: white;
             font-size: 1.8rem;
@@ -69,6 +79,10 @@
             align-items: center;
             padding: 2rem;
             min-height: 100vh;
+            background: url('https://i.ibb.co/bgBdtnv1/app-bg.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
         }
         
         .login-container {
@@ -79,6 +93,23 @@
             width: 100%;
             max-width: 420px;
             text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .login-logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 1.5rem;
+            background: white;
+            border-radius: 20px;
+            padding: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .login-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
         
         .login-container h2 {
@@ -183,7 +214,10 @@
         }
         
         #posScreen {
-            background: #f4f7f9;
+            background: url('https://i.ibb.co/bgBdtnv1/app-bg.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             min-height: 100vh;
         }
         
@@ -198,10 +232,11 @@
         }
         
         .scanner-section, .cart-section, .actions-section {
-            background: white;
+            background: rgba(255, 255, 255, 0.98);
             border-radius: 16px;
             padding: 2rem;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
         }
         
         .scanner-section {
@@ -373,6 +408,107 @@
             margin-top: 1.5rem;
         }
         
+        .cart-item {
+            display: flex;
+            align-items: center;
+            padding: 1.2rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border: 2px solid #e9ecef;
+        }
+        
+        .cart-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+            border-color: #667eea;
+        }
+        
+        .cart-item-info {
+            flex: 1;
+            padding-right: 1rem;
+        }
+        
+        .cart-item-name {
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.25rem;
+            font-size: 1.05rem;
+        }
+        
+        .cart-item-details {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .cart-item-actions {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.5rem;
+        }
+        
+        .cart-item-price {
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: #11998e;
+            margin-bottom: 0.5rem;
+        }
+        
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .quantity-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+        }
+        
+        .quantity-btn:hover {
+            transform: scale(1.15);
+            box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .quantity-display {
+            min-width: 35px;
+            text-align: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: #212529;
+        }
+        
+        .remove-btn {
+            background: linear-gradient(90deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+            border: none;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border-radius: 20px;
+            padding: 0.35rem 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(235, 51, 73, 0.3);
+        }
+        
+        .remove-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(235, 51, 73, 0.4);
+        }
+        
         @media (max-width: 1024px) {
             .pos-container {
                 grid-template-columns: 1fr;
@@ -409,6 +545,7 @@
         <!-- Header -->
         <header class="header">
             <div class="logo">
+                <img src="https://i.ibb.co/kVSWjKbj/logo.png" alt="JLINK Logo" class="logo-img">
                 <h1>JLINK POS</h1>
             </div>
             <div class="user-info">
@@ -420,11 +557,13 @@
         <!-- Login Screen -->
         <div id="loginScreen" class="screen active">
             <div class="login-container">
+                <div class="login-logo">
+                    <img src="https://i.ibb.co/kVSWjKbj/logo.png" alt="JLINK Logo">
+                </div>
                 <h2>JLINK POS Login</h2>
                 <div class="login-form">
                     <input type="email" id="loginEmail" placeholder="Email" class="form-input">
                     
-                    <!-- Password Input with Toggle -->
                     <div class="password-container">
                         <input type="password" id="loginPassword" placeholder="Password" class="form-input password-input">
                         <button type="button" class="password-toggle" id="passwordToggle">
