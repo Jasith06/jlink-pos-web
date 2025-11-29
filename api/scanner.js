@@ -1,58 +1,37 @@
-// api/scanner.js - Vercel Serverless Function (Fixed)
-import fs from 'fs';
-import path from 'path';
+// api/scanner.js - Vercel Serverless Function with Firebase Queue
+import admin from 'firebase-admin';
 
-// ===== CONFIGURATION =====
-const QUEUE_FILE = '/tmp/scanner_queue.json';
-const MAX_QUEUE_SIZE = 100;
+// ===== FIREBASE CONFIGURATION =====
+const FIREBASE_CONFIG = {
+  projectId: "jlink-38a3d",
+  databaseURL: "https://jlink-38a3d-default-rtdb.asia-southeast1.firebasedatabase.app",
+};
+
+// ===== INITIALIZE FIREBASE ADMIN =====
+let firebaseApp;
+try {
+  if (!admin.apps.length) {
+    // Initialize with environment variables (set in Vercel)
+    firebaseApp = admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: FIREBASE_CONFIG.projectId,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      }),
+      databaseURL: FIREBASE_CONFIG.databaseURL,
+    });
+    console.log('✅ Firebase Admin initialized');
+  } else {
+    firebaseApp = admin.app();
+  }
+} catch (error) {
+  console.error('❌ Firebase initialization error:', error.message);
+}
+
+const db = admin.database();
 const DEBUG_MODE = process.env.VERCEL_ENV !== 'production';
 
 // ===== HELPER FUNCTIONS =====
-
-/**
- * Read scanner queue from temporary storage
- */
-const readQueue = () => {
-  try {
-    if (fs.existsSync(QUEUE_FILE)) {
-      const content = fs.readFileSync(QUEUE_FILE, 'utf8');
-      const queue = JSON.parse(content);
-      
-      if (DEBUG_MODE) {
-        console.log(`📖 Read ${queue.length} items from queue`);
-      }
-      
-      return Array.isArray(queue) ? queue : [];
-    }
-  } catch (error) {
-    console.error('❌ Error reading queue:', error.message);
-  }
-  return [];
-};
-
-/**
- * Write scanner queue to temporary storage
- */
-const writeQueue = (queue) => {
-  try {
-    // Ensure /tmp directory exists
-    const tmpDir = path.dirname(QUEUE_FILE);
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-    
-    fs.writeFileSync(QUEUE_FILE, JSON.stringify(queue, null, 2), 'utf8');
-    
-    if (DEBUG_MODE) {
-      console.log(`💾 Wrote ${queue.length} items to queue`);
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('❌ Error writing queue:', error.message);
-    return false;
-  }
-};
 
 /**
  * Extract product code from various QR code formats
@@ -113,19 +92,35 @@ const generateScanId = () => {
 };
 
 /**
- * Clean old processed scans from queue
+ * Clean old processed scans from Firebase
  */
-const cleanOldScans = (queue) => {
-  const oneHourAgo = Date.now() - (60 * 60 * 1000);
-  return queue.filter(scan => {
-    // Keep unprocessed scans
-    if (!scan.processed) return true;
+const cleanOldScans = async () => {
+  try {
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    const scansRef = db.ref('scanner_queue');
+    const snapshot = await scansRef.once('value');
     
-    // Keep processed scans less than 1 hour old
-    if (scan.timestamp > oneHourAgo) return true;
+    if (!snapshot.exists()) return;
     
-    return false;
-  });
+    const scans = snapshot.val();
+    const updates = {};
+    
+    Object.entries(scans).forEach(([key, scan]) => {
+      // Remove processed scans older than 1 hour
+      if (scan.processed && scan.timestamp < oneHourAgo) {
+        updates[key] = null;
+      }
+    });
+    
+    if (Object.keys(updates).length > 0) {
+      await scansRef.update(updates);
+      if (DEBUG_MODE) {
+        console.log(`🧹 Cleaned ${Object.keys(updates).length} old scans`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error cleaning old scans:', error.message);
+  }
 };
 
 // ===== MAIN HANDLER =====
@@ -145,21 +140,25 @@ export default async function handler(req, res) {
   const startTime = Date.now();
   
   try {
+    // Check Firebase connection
+    if (!firebaseApp) {
+      throw new Error('Firebase not initialized');
+    }
+    
     // ===== GET REQUEST - Poll for new scans =====
     if (req.method === 'GET') {
       if (DEBUG_MODE) {
         console.log('📥 GET request - Polling for scans');
       }
       
-      let queue = readQueue();
+      // Clean old scans first
+      await cleanOldScans();
       
-      // Clean old scans
-      queue = cleanOldScans(queue);
+      // Get all unprocessed scans from Firebase
+      const scansRef = db.ref('scanner_queue');
+      const snapshot = await scansRef.orderByChild('processed').equalTo(false).once('value');
       
-      // Find new unprocessed scans
-      const newScans = queue.filter(scan => !scan.processed);
-      
-      if (newScans.length === 0) {
+      if (!snapshot.exists()) {
         return res.status(200).json({
           success: true,
           scans: [],
@@ -169,37 +168,42 @@ export default async function handler(req, res) {
         });
       }
       
-      // Mark scans as processed
-      const scanIds = newScans.map(scan => scan.id);
-      const updatedQueue = queue.map(scan => {
-        if (scanIds.includes(scan.id)) {
-          return {
-            ...scan,
-            processed: true,
-            processed_at: new Date().toISOString()
-          };
-        }
-        return scan;
+      const scans = [];
+      const updates = {};
+      
+      snapshot.forEach((childSnapshot) => {
+        const scan = childSnapshot.val();
+        scans.push({
+          id: childSnapshot.key,
+          ...scan
+        });
+        
+        // Mark as processed
+        updates[`${childSnapshot.key}/processed`] = true;
+        updates[`${childSnapshot.key}/processed_at`] = new Date().toISOString();
       });
       
-      writeQueue(updatedQueue);
+      // Update all scans as processed
+      if (Object.keys(updates).length > 0) {
+        await scansRef.update(updates);
+      }
       
       if (DEBUG_MODE) {
-        console.log(`✅ Returning ${newScans.length} new scan(s)`);
+        console.log(`✅ Returning ${scans.length} new scan(s)`);
       }
       
       return res.status(200).json({
         success: true,
-        scans: newScans,
-        count: newScans.length,
-        message: `${newScans.length} new scan(s) retrieved`,
+        scans: scans,
+        count: scans.length,
+        message: `${scans.length} new scan(s) retrieved`,
         processingTime: Date.now() - startTime
       });
     }
     
     // ===== POST REQUEST - Add new scan from ESP32 =====
     if (req.method === 'POST') {
-      const { qr_code, scanner_id, timestamp } = req.body;
+      const { qr_code, scanner_id, timestamp, product_code } = req.body;
       
       // Validate required fields
       if (!qr_code) {
@@ -218,9 +222,9 @@ export default async function handler(req, res) {
       }
       
       // Extract product code
-      const productCode = extractProductCode(qr_code);
+      const extractedCode = product_code || extractProductCode(qr_code);
       
-      if (!productCode) {
+      if (!extractedCode) {
         console.warn('⚠️ Could not extract product code from QR data');
         return res.status(400).json({
           success: false,
@@ -231,9 +235,8 @@ export default async function handler(req, res) {
       
       // Create scan data object
       const scanData = {
-        id: generateScanId(),
         qr_code: qr_code,
-        product_code: productCode,
+        product_code: extractedCode,
         scanner_id: scanner_id || 'UNKNOWN',
         timestamp: timestamp || Date.now(),
         received_at: new Date().toISOString(),
@@ -241,59 +244,40 @@ export default async function handler(req, res) {
         server_time: Date.now()
       };
       
-      // Read current queue
-      let queue = readQueue();
+      // Save to Firebase
+      const scansRef = db.ref('scanner_queue');
+      const newScanRef = scansRef.push();
+      await newScanRef.set(scanData);
       
-      // Clean old scans before adding new one
-      queue = cleanOldScans(queue);
+      const scanId = newScanRef.key;
       
-      // Add new scan to queue
-      queue.push(scanData);
-      
-      // Limit queue size
-      if (queue.length > MAX_QUEUE_SIZE) {
-        queue = queue.slice(-MAX_QUEUE_SIZE);
-      }
-      
-      // Write updated queue
-      const writeSuccess = writeQueue(queue);
-      
-      if (!writeSuccess) {
-        console.error('❌ Failed to write queue');
-        return res.status(500).json({
-          success: false,
-          error: 'Failed to save scan data',
-          scan_id: scanData.id
-        });
-      }
-      
-      console.log('✅ Scan added to queue:', {
-        id: scanData.id,
-        product_code: productCode,
+      console.log('✅ Scan saved to Firebase:', {
+        id: scanId,
+        product_code: extractedCode,
         scanner_id: scanData.scanner_id
       });
       
       return res.status(200).json({
         success: true,
         message: 'QR code received and queued successfully',
-        scan_id: scanData.id,
+        scan_id: scanId,
         qr_code: qr_code,
-        product_code: productCode,
+        product_code: extractedCode,
         scanner_id: scanData.scanner_id,
         received_at: scanData.received_at,
-        queue_position: queue.length,
         instructions: 'Product will appear in shopping cart when POS polls for updates',
         processingTime: Date.now() - startTime
       });
     }
     
-    // ===== DELETE REQUEST - Clear queue (optional) =====
+    // ===== DELETE REQUEST - Clear queue =====
     if (req.method === 'DELETE') {
       if (DEBUG_MODE) {
         console.log('🗑️ DELETE request - Clearing queue');
       }
       
-      writeQueue([]);
+      const scansRef = db.ref('scanner_queue');
+      await scansRef.remove();
       
       return res.status(200).json({
         success: true,
