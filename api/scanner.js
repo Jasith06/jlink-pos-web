@@ -1,6 +1,4 @@
-// api/scanner.js - Enhanced Vercel Serverless Function
-// Replaces scanner.php with improved error handling and logging
-
+// api/scanner.js - Vercel Serverless Function (Fixed)
 import fs from 'fs';
 import path from 'path';
 
@@ -135,7 +133,7 @@ const cleanOldScans = (queue) => {
 export default async function handler(req, res) {
   // Set CORS headers for all requests
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Content-Type', 'application/json');
   
