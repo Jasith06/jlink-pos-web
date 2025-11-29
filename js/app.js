@@ -324,14 +324,9 @@ class JLinkPOS {
     }
 
     setScannerAPIUrl() {
-        // IMPORTANT: Update this URL after deploying to Vercel
-        // Format: https://your-project-name.vercel.app/api/scanner
-        
-        // For development with Vercel CLI (vercel dev)
         if (window.location.hostname === 'localhost') {
             this.scannerAPIUrl = 'http://localhost:3000/api/scanner';
         } else {
-            // Production Vercel URL - UPDATE THIS AFTER DEPLOYMENT
             this.scannerAPIUrl = `${window.location.origin}/api/scanner`;
         }
         
@@ -621,6 +616,7 @@ class JLinkPOS {
             this.setLoadingState(false);
             console.error('❌ Login error:', error);
 
+            // CORRECTION 2: Replace "Firebase" with "JLINK" in error messages
             let errorMessage = 'Login failed';
             if (error.code === 'auth/user-not-found') {
                 errorMessage = 'No account found with this email';
@@ -628,8 +624,11 @@ class JLinkPOS {
                 errorMessage = 'Incorrect password';
             } else if (error.code === 'auth/invalid-email') {
                 errorMessage = 'Invalid email address';
+            } else if (error.code === 'auth/invalid-login-credentials') {
+                errorMessage = 'JLINK: Error (auth/invalid-login-credentials)';
             } else {
-                errorMessage = error.message;
+                // Replace "Firebase" with "JLINK" in any error message
+                errorMessage = error.message.replace(/Firebase/g, 'JLINK');
             }
 
             await jlinkDialog.error(`Login failed: ${errorMessage}`);
@@ -1038,5 +1037,6 @@ if (document.readyState === 'loading') {
 } else {
     initializeApp();
 }
+
 
 
