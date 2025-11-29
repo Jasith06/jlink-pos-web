@@ -37,13 +37,10 @@ tmp/
 temp/
 *.tmp
 
-# Build output
-dist/
-build/
-public/
-
-# PHP files (no longer needed on Vercel)
-*.php
+# REMOVE OR COMMENT THESE LINES - They conflict with Vercel:
+# dist/
+# build/
+# public/
 
 # Test files
 test/
@@ -74,7 +71,6 @@ $RECYCLE.BIN/
 config.local.js
 local_settings.json
 
-# IMPORTANT: DO NOT IGNORE ASSETS!
-# Make sure assets folder is included in Git
-!assets/
-!assets/**
+# IMPORTANT: Allow public directory for Vercel
+!public/
+!public/**
