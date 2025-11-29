@@ -32,11 +32,13 @@ function copyFileSafe(source, destination) {
 }
 
 // Copy index.html
-if (copyFileSync(
+if (copyFileSafe(  // ← FIXED: Changed from copyFileSync to copyFileSafe
   path.join(__dirname, 'index.html'),
   path.join(publicDir, 'index.html')
 )) {
   console.log('✅ Copied index.html');
+} else {
+  console.log('❌ Failed to copy index.html');
 }
 
 // Copy JS files if they exist
@@ -77,7 +79,13 @@ console.log('Firebase config loaded');`,
     'app.js': `// Main app placeholder
 console.log('JLINK POS App loaded');`,
     'cart-manager.js': `// Cart manager placeholder
-console.log('Cart manager loaded');`
+console.log('Cart manager loaded');`,
+    'product-service.js': `// Product service placeholder
+console.log('Product service loaded');`,
+    'sales-service.js': `// Sales service placeholder  
+console.log('Sales service loaded');`,
+    'email-service.js': `// Email service placeholder
+console.log('Email service loaded');`
   };
   
   Object.entries(requiredFiles).forEach(([filename, content]) => {
