@@ -1,9 +1,9 @@
-// api/scanner.js - Vercel Serverless Function with Firebase Queue
+// api/scanner.js - Vercel Serverless Function with Firebase Queue (FIXED)
 import admin from 'firebase-admin';
 
 // ===== FIREBASE CONFIGURATION =====
 const FIREBASE_CONFIG = {
-  projectId: "jlink-38a3d",
+  projectId: process.env.FIREBASE_PROJECT_ID || "jlink-38a3d",
   databaseURL: "https://jlink-38a3d-default-rtdb.asia-southeast1.firebasedatabase.app",
 };
 
@@ -11,21 +11,30 @@ const FIREBASE_CONFIG = {
 let firebaseApp;
 try {
   if (!admin.apps.length) {
-    // Initialize with environment variables (set in Vercel)
+    // Check if environment variables are set
+    if (!process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+      console.error('❌ CRITICAL: Firebase environment variables not set in Vercel!');
+      console.error('Please add FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in Vercel dashboard');
+      throw new Error('Firebase credentials not configured');
+    }
+
+    // Initialize with environment variables
     firebaseApp = admin.initializeApp({
       credential: admin.credential.cert({
         projectId: FIREBASE_CONFIG.projectId,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
       }),
       databaseURL: FIREBASE_CONFIG.databaseURL,
     });
-    console.log('✅ Firebase Admin initialized');
+    console.log('✅ Firebase Admin initialized successfully');
+    console.log('📧 Client Email:', process.env.FIREBASE_CLIENT_EMAIL);
   } else {
     firebaseApp = admin.app();
   }
 } catch (error) {
   console.error('❌ Firebase initialization error:', error.message);
+  console.error('Stack:', error.stack);
 }
 
 const db = admin.database();
@@ -83,15 +92,6 @@ const extractProductCode = (qrData) => {
 };
 
 /**
- * Generate unique scan ID
- */
-const generateScanId = () => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 9);
-  return `scan_${timestamp}_${random}`;
-};
-
-/**
  * Clean old processed scans from Firebase
  */
 const cleanOldScans = async () => {
@@ -142,7 +142,13 @@ export default async function handler(req, res) {
   try {
     // Check Firebase connection
     if (!firebaseApp) {
-      throw new Error('Firebase not initialized');
+      console.error('❌ Firebase not initialized - check environment variables');
+      return res.status(500).json({
+        success: false,
+        error: 'Firebase not initialized',
+        message: 'Server configuration error. Check Vercel environment variables.',
+        hint: 'Add FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in Vercel dashboard'
+      });
     }
     
     // ===== GET REQUEST - Poll for new scans =====
@@ -295,12 +301,16 @@ export default async function handler(req, res) {
     
   } catch (error) {
     console.error('❌ Scanner API Error:', error);
+    console.error('Error stack:', error.stack);
     
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
       message: error.message,
-      ...(DEBUG_MODE && { stack: error.stack })
+      ...(DEBUG_MODE && { 
+        stack: error.stack,
+        hint: 'Check Vercel logs for details'
+      })
     });
   }
 }
