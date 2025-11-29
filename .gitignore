@@ -37,7 +37,7 @@ tmp/
 temp/
 *.tmp
 
-# REMOVE OR COMMENT THESE LINES - They conflict with Vercel:
+# REMOVE THESE LINES - They conflict with Vercel:
 # dist/
 # build/
 # public/
