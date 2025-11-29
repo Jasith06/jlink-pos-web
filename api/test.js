@@ -1,5 +1,4 @@
-// api/test.js - Vercel Serverless Function for Testing
-// This replaces your PHP test.php
+// api/test.js - Vercel Serverless Function Test Endpoint
 
 export default async function handler(req, res) {
   // CORS headers
@@ -36,7 +35,7 @@ export default async function handler(req, res) {
     }
   };
 
-  console.log('Test endpoint accessed:', testData);
+  console.log('✅ Test endpoint accessed:', testData);
 
   return res.status(200).json(testData);
 }
