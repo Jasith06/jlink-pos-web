@@ -2,17 +2,12 @@
   "name": "jlink-pos-web",
   "version": "1.0.0",
   "description": "JLINK POS System - Web Application",
-  "main": "index.html",
   "scripts": {
     "build": "node build.js",
-    "dev": "vercel dev",
-    "start": "serve public"
+    "dev": "vercel dev"
   },
   "dependencies": {
     "@emailjs/browser": "^3.11.0"
-  },
-  "devDependencies": {
-    "serve": "^14.0.0"
   },
   "keywords": [
     "pos",
