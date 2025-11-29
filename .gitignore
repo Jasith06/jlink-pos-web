@@ -40,11 +40,10 @@ temp/
 # Build output
 dist/
 build/
+public/
 
 # PHP files (no longer needed on Vercel)
 *.php
-api/config.php
-api/scanner.php
 
 # Test files
 test/
@@ -74,3 +73,8 @@ $RECYCLE.BIN/
 # Local configuration
 config.local.js
 local_settings.json
+
+# IMPORTANT: DO NOT IGNORE ASSETS!
+# Make sure assets folder is included in Git
+!assets/
+!assets/**
