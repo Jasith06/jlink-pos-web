@@ -86,17 +86,9 @@ try {
   console.error('❌ Error copying assets:', err.message);
 }
 
-// Copy API folder
-try {
-  const apiDir = path.join(publicDir, 'api');
-  if (!fs.existsSync(apiDir)) {
-    fs.mkdirSync(apiDir, { recursive: true });
-  }
-  copyRecursive(path.join(__dirname, 'api'), apiDir);
-  console.log('✅ Copied api directory');
-} catch (err) {
-  console.error('❌ Error copying api:', err.message);
-}
+// ❌ DO NOT COPY API FOLDER - Vercel needs it at root level!
+console.log('ℹ️  Skipping API folder (must stay at root for serverless functions)');
 
 console.log('✅ Build completed successfully!');
 console.log('📁 Output directory: public/');
+console.log('📁 API functions: api/ (at root level)');
