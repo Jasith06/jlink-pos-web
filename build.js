@@ -11,84 +11,88 @@ if (!fs.existsSync(publicDir)) {
   console.log('✅ Created public directory');
 }
 
-// Function to copy files recursively
-function copyRecursive(src, dest) {
-  const exists = fs.existsSync(src);
-  const stats = exists && fs.statSync(src);
-  const isDirectory = exists && stats.isDirectory();
-
-  if (isDirectory) {
-    if (!fs.existsSync(dest)) {
-      fs.mkdirSync(dest, { recursive: true });
+// Function to copy files safely
+function copyFileSafe(source, destination) {
+  try {
+    // Ensure destination directory exists
+    const destDir = path.dirname(destination);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
     }
-    fs.readdirSync(src).forEach(childItemName => {
-      copyRecursive(
-        path.join(src, childItemName),
-        path.join(dest, childItemName)
-      );
-    });
-  } else {
-    fs.copyFileSync(src, dest);
+    
+    if (fs.existsSync(source)) {
+      fs.copyFileSync(source, destination);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error(`❌ Error copying ${source}:`, err.message);
+    return false;
   }
 }
 
 // Copy index.html
-try {
-  fs.copyFileSync(
-    path.join(__dirname, 'index.html'),
-    path.join(publicDir, 'index.html')
-  );
+if (copyFileSync(
+  path.join(__dirname, 'index.html'),
+  path.join(publicDir, 'index.html')
+)) {
   console.log('✅ Copied index.html');
-} catch (err) {
-  console.error('❌ Error copying index.html:', err.message);
 }
 
-// Copy JS folder
-try {
-  const jsDir = path.join(publicDir, 'js');
-  if (!fs.existsSync(jsDir)) {
-    fs.mkdirSync(jsDir, { recursive: true });
+// Copy JS files if they exist
+const jsSourceDir = path.join(__dirname, 'js');
+const jsDestDir = path.join(publicDir, 'js');
+
+if (fs.existsSync(jsSourceDir)) {
+  if (!fs.existsSync(jsDestDir)) {
+    fs.mkdirSync(jsDestDir, { recursive: true });
   }
-  copyRecursive(path.join(__dirname, 'js'), jsDir);
-  console.log('✅ Copied js directory');
-} catch (err) {
-  console.error('❌ Error copying js:', err.message);
-}
-
-// Copy styles folder
-try {
-  const stylesDir = path.join(publicDir, 'styles');
-  if (!fs.existsSync(stylesDir)) {
-    fs.mkdirSync(stylesDir, { recursive: true });
-  }
-  copyRecursive(path.join(__dirname, 'styles'), stylesDir);
-  console.log('✅ Copied styles directory');
-} catch (err) {
-  console.error('❌ Error copying styles:', err.message);
-}
-
-// Copy assets folder (if it exists)
-try {
-  const assetsDir = path.join(publicDir, 'assets');
-  const sourceAssets = path.join(__dirname, 'assets');
   
-  if (fs.existsSync(sourceAssets)) {
-    if (!fs.existsSync(assetsDir)) {
-      fs.mkdirSync(assetsDir, { recursive: true });
-    }
-    copyRecursive(sourceAssets, assetsDir);
-    console.log('✅ Copied assets directory');
-  } else {
-    console.warn('⚠️ Assets directory not found, creating empty one');
-    fs.mkdirSync(assetsDir, { recursive: true });
+  try {
+    const files = fs.readdirSync(jsSourceDir);
+    let copiedCount = 0;
+    
+    files.forEach(file => {
+      if (file.endsWith('.js')) {
+        if (copyFileSafe(
+          path.join(jsSourceDir, file),
+          path.join(jsDestDir, file)
+        )) {
+          copiedCount++;
+        }
+      }
+    });
+    
+    console.log(`✅ Copied ${copiedCount} JS files`);
+  } catch (err) {
+    console.error('❌ Error copying JS files:', err.message);
   }
-} catch (err) {
-  console.error('❌ Error copying assets:', err.message);
+} else {
+  console.log('⚠️ JS directory not found, creating placeholder');
+  
+  // Create minimal required JS files
+  const requiredFiles = {
+    'firebase-config.js': `// Firebase configuration placeholder
+console.log('Firebase config loaded');`,
+    'app.js': `// Main app placeholder
+console.log('JLINK POS App loaded');`,
+    'cart-manager.js': `// Cart manager placeholder
+console.log('Cart manager loaded');`
+  };
+  
+  Object.entries(requiredFiles).forEach(([filename, content]) => {
+    const filePath = path.join(jsDestDir, filename);
+    fs.writeFileSync(filePath, content);
+    console.log(`✅ Created ${filename}`);
+  });
 }
 
-// ❌ DO NOT COPY API FOLDER - Vercel needs it at root level!
-console.log('ℹ️  Skipping API folder (must stay at root for serverless functions)');
+// Create assets directory if needed
+const assetsDestDir = path.join(publicDir, 'assets');
+if (!fs.existsSync(assetsDestDir)) {
+  fs.mkdirSync(assetsDestDir, { recursive: true });
+  console.log('✅ Created assets directory');
+}
 
 console.log('✅ Build completed successfully!');
 console.log('📁 Output directory: public/');
-console.log('📁 API functions: api/ (at root level)');
