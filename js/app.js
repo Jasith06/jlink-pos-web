@@ -618,13 +618,13 @@ class JLinkPOS {
 
             // CORRECTION 2: Replace "Firebase" with "JLINK" in error messages
             let errorMessage = 'Login failed';
-            if (error.code === 'user-not-found') {
+            if (error.code === 'auth/user-not-found') {
                 errorMessage = 'No account found with this email';
-            } else if (error.code === 'wrong-password') {
+            } else if (error.code === 'auth/wrong-password') {
                 errorMessage = 'Incorrect password';
-            } else if (error.code === 'invalid-email') {
+            } else if (error.code === 'auth/invalid-email') {
                 errorMessage = 'Invalid email address';
-            } else if (error.code === 'invalid-login-credentials') {
+            } else if (error.code === 'auth/invalid-login-credentials') {
                 errorMessage = 'JLINK: Error (invalid-login-credentials)';
             } else {
                 // Replace "Firebase" with "JLINK" in any error message
@@ -1037,6 +1037,7 @@ if (document.readyState === 'loading') {
 } else {
     initializeApp();
 }
+
 
 
 
