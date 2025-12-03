@@ -70,7 +70,7 @@ class EmailService {
                 store_name: 'JLINK Store',
                 store_address: 'Colombo, Sri Lanka',
                 store_phone: '+94759620983',
-                store_email: 'balorjasithbalor2017@gmail.com',
+                store_email: 'jlinkpos06@gmail.com',
                 thank_you_message: 'Thank you for shopping with us! We appreciate your business and look forward to serving you again.'
             };
 
@@ -323,4 +323,5 @@ window.checkEmailConfig = function () {
 
 console.log('✅ EmailService loaded successfully');
 console.log('💡 Test with: testEmailService()');
+
 console.log('💡 Check config with: checkEmailConfig()');
