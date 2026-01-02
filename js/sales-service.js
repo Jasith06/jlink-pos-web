@@ -1,19 +1,12 @@
-// js/sales-service.js - FIXED VERSION with Scanner API Integration
+/ js/sales-service.js - FIXED VERSION
 class SalesService {
     constructor() {
         this.currentUser = null;
-        this.scannerAPIUrl = '/api/scanner'; // Default scanner API endpoint
     }
 
     setUser(user) {
         this.currentUser = user;
         console.log("✅ SalesService: User set", user?.email);
-    }
-
-    // Set custom scanner API URL if needed
-    setScannerAPIUrl(url) {
-        this.scannerAPIUrl = url;
-        console.log("🔧 Scanner API URL set to:", url);
     }
 
     async processSale(saleData) {
@@ -70,9 +63,6 @@ class SalesService {
             // Send sale notification to mobile app
             await this.sendSaleToMobileApp(saleRecord);
 
-            // 🔥 NEW: Notify ESP32 scanner about sale completion
-            await this.notifyScannerSaleComplete(saleData.totals.total, saleId);
-
             console.log("✅ Sale processed successfully:", saleId);
             return saleId;
 
@@ -95,86 +85,6 @@ class SalesService {
             console.log("✅ Sale synced to mobile app");
         } catch (error) {
             console.error("⚠️ Failed to sync to mobile app:", error);
-        }
-    }
-
-    // 🔥 NEW FUNCTION: Notify ESP32 scanner about sale completion
-    async notifyScannerSaleComplete(totalAmount, saleId) {
-        try {
-            console.log("📡 Notifying scanner about sale completion...");
-            
-            const notificationData = {
-                action: 'complete_sale',
-                total: totalAmount,
-                saleId: saleId,
-                timestamp: Date.now(),
-                storeName: this.currentUser?.displayName || 'POS Store'
-            };
-
-            // Send notification to scanner API
-            const response = await fetch(this.scannerAPIUrl, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(notificationData)
-            });
-
-            if (!response.ok) {
-                throw new Error(`Scanner API responded with status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            
-            if (result.success) {
-                console.log("✅ Scanner notified successfully:", {
-                    saleId: saleId,
-                    total: totalAmount,
-                    scannerResponse: result
-                });
-                
-                // Optionally save scanner notification record
-                await this.saveScannerNotification(saleId, notificationData, result);
-                
-                return result;
-            } else {
-                throw new Error(`Scanner API error: ${result.error || 'Unknown error'}`);
-            }
-
-        } catch (error) {
-            console.warn("⚠️ Could not notify scanner (continuing sale process):", error.message);
-            
-            // Don't fail the sale if scanner notification fails
-            // This is non-critical for the sale transaction
-            return {
-                success: false,
-                error: error.message,
-                warning: 'Scanner notification failed but sale completed successfully'
-            };
-        }
-    }
-
-    // Optional: Save scanner notification for tracking
-    async saveScannerNotification(saleId, notificationData, response) {
-        try {
-            if (!this.currentUser) return;
-            
-            const notificationsRef = window.database.ref(
-                `users/${this.currentUser.uid}/scanner_notifications/${saleId}`
-            );
-            
-            await notificationsRef.set({
-                ...notificationData,
-                response: response,
-                notifiedAt: new Date().toISOString(),
-                scannerAPI: this.scannerAPIUrl
-            });
-            
-            console.log("📝 Scanner notification saved to Firebase");
-            
-        } catch (error) {
-            console.warn("⚠️ Could not save scanner notification record:", error);
         }
     }
 
