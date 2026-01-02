@@ -1,4 +1,4 @@
-/ js/sales-service.js - FIXED VERSION
+// js/sales-service.js - FIXED VERSION
 class SalesService {
     constructor() {
         this.currentUser = null;
@@ -230,3 +230,4 @@ class SalesService {
 
 // Create global instance
 const salesService = new SalesService();
+
