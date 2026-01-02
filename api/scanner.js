@@ -207,10 +207,54 @@ export default async function handler(req, res) {
       });
     }
     
-    // ===== POST REQUEST - Add new scan from ESP32 =====
+    // ===== POST REQUEST =====
     if (req.method === 'POST') {
-      const { qr_code, scanner_id, timestamp, product_code } = req.body;
+      // Handle different POST actions based on request body
+      const { action, qr_code, scanner_id, timestamp, product_code, total } = req.body;
       
+      // ===== ACTION: complete_sale =====
+      if (action === 'complete_sale') {
+        if (DEBUG_MODE) {
+          console.log('💰 POST request - Sale completion');
+          console.log('Total:', total);
+        }
+        
+        // Validate required fields
+        if (typeof total === 'undefined') {
+          return res.status(400).json({
+            success: false,
+            error: 'Total amount is required for sale completion'
+          });
+        }
+        
+        const completionData = {
+          action: 'sale_complete',
+          total: total,
+          timestamp: Date.now(),
+          processed: false,
+          server_time: Date.now()
+        };
+        
+        // Save to Firebase
+        const scansRef = db.ref('scanner_queue');
+        const newScanRef = scansRef.push();
+        await newScanRef.set(completionData);
+        
+        if (DEBUG_MODE) {
+          console.log('✅ Sale completion saved to Firebase:', completionData);
+        }
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Sale completion sent to scanner',
+          scan_id: newScanRef.key,
+          total: total,
+          timestamp: completionData.timestamp,
+          processingTime: Date.now() - startTime
+        });
+      }
+      
+      // ===== ACTION: New QR scan (default behavior) =====
       // Validate required fields
       if (!qr_code) {
         console.warn('⚠️ POST request missing qr_code');
@@ -314,5 +358,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
